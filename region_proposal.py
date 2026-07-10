@@ -31,16 +31,36 @@ class AblationConfig:
 class ProposalDiagnostics:
     raw_components: int
     after_filtering: int
+    after_splitting: int
     after_merging: int
+    after_overlap_suppression: int
+    ranked_count: int
+    final_count: int
+    removed_by_area: int
+    removed_by_border: int
+    removed_by_overlap: int
+    split_operations: int
+    merged_candidates: int
     heatmap_threshold: float
     score_distribution: tuple[float, ...]
+    rejection_reasons: dict[str, int]
+    stage_overlay_paths: dict[str, Path]
 
     def to_dict(self) -> dict[str, object]:
         scores = np.asarray(self.score_distribution, dtype=float)
         return {
             "Raw connected components": self.raw_components,
             "After filtering": self.after_filtering,
+            "After splitting": self.after_splitting,
             "After merging": self.after_merging,
+            "After overlap suppression": self.after_overlap_suppression,
+            "After ranking sanity filters": self.ranked_count,
+            "Final top-K": self.final_count,
+            "Removed by area": self.removed_by_area,
+            "Removed by border": self.removed_by_border,
+            "Removed by overlap": self.removed_by_overlap,
+            "Split operations": self.split_operations,
+            "Merged candidates": self.merged_candidates,
             "Heatmap threshold": round(self.heatmap_threshold, 1),
             "Minimum score": round(float(scores.min()), 1) if scores.size else 0.0,
             "Median score": round(float(np.median(scores)), 1) if scores.size else 0.0,
@@ -112,6 +132,7 @@ class ProposalResult:
     diagnostics: ProposalDiagnostics
     comparison_paths: dict[str, Path]
     comparison_counts: dict[str, int]
+    visualization_paths: dict[str, Path]
 
 
 @dataclass
@@ -123,7 +144,7 @@ class _Candidate:
 
 def propose_regions(
     image: np.ndarray, feature_maps: FeatureMaps, image_stem: str, min_area: int = 250,
-    max_regions: int = 20, min_relative_area: float = 0.0002, max_relative_area: float = 0.85,
+    max_regions: int = 8, min_relative_area: float = 0.0002, max_relative_area: float = 0.85,
     score_weights: dict[str, float] | None = None, border_margin: float = 0.025,
     ablation: AblationConfig | None = None,
 ) -> ProposalResult:
@@ -136,22 +157,44 @@ def propose_regions(
 
     ablation = ablation or AblationConfig()
     valid_area = _valid_image_area(image, border_margin)
-    fused, threshold, raw_count = _fused_multiscale_mask(image, feature_maps, valid_area, ablation)
-    components = _components(fused)
-    filtered = [c for c in components if _keep_candidate(c, min_pixels, image_area, max_relative_area, width, height, feature_maps)]
-    filtered_count = len(filtered)
-    merged = _merge_candidates(filtered, feature_maps, width, height) if ablation.region_merging else filtered
-    split = []
-    for candidate in merged:
-        split.extend(_split_candidate(candidate, feature_maps.anomaly_strength, image_area))
-    candidates = []
-    for item in split:
-        refined=_refine_candidate(item,feature_maps,min_pixels) if ablation.mask_refinement else item
-        for coherent_part in _split_candidate(refined,feature_maps.anomaly_strength,image_area):
-            candidates.extend(_split_fragmented(coherent_part,min_pixels,image_area))
+    fused, threshold, _ = _fused_multiscale_mask(image, feature_maps, valid_area, ablation)
+    raw_candidates = _components(fused)
+    rejection_reasons: dict[str, int] = {}
+    filtered: list[_Candidate] = []
+    for candidate in raw_candidates:
+        reason = _filter_reason(candidate, min_pixels, image_area, max_relative_area, valid_area, feature_maps)
+        if reason:
+            rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+        else:
+            filtered.append(candidate)
+
+    split_candidates: list[_Candidate] = []
+    split_operations = 0
+    for candidate in filtered:
+        parts = _split_candidate(candidate, feature_maps.anomaly_strength, image_area)
+        split_operations += int(len(parts) > 1)
+        for part in parts:
+            refined = _refine_candidate(part, feature_maps, min_pixels) if ablation.mask_refinement else part
+            refined_parts = _split_fragmented(refined, min_pixels, image_area)
+            split_operations += int(len(refined_parts) > 1)
+            for refined_part in refined_parts:
+                final_part = _finalize_candidate(refined_part, min_pixels)
+                if final_part is None:
+                    rejection_reasons["empty_or_tiny_after_refinement"] = rejection_reasons.get("empty_or_tiny_after_refinement", 0) + 1
+                    continue
+                coherence = _coherence_metrics(final_part.mask, feature_maps.anomaly_strength)["coherence_score"]
+                bbox_area = _bbox_area(final_part.bbox) / image_area
+                if bbox_area > 0.22 and coherence < 0.52:
+                    rejection_reasons["broad_low_coherence"] = rejection_reasons.get("broad_low_coherence", 0) + 1
+                    continue
+                split_candidates.append(final_part)
+
+    merged, merged_count = _merge_overlapping_candidates(split_candidates, feature_maps)
+    assert len(merged) <= len(split_candidates), "Merging cannot increase candidate count."
+    nms_candidates, overlap_rejected = _suppress_overlaps(merged, image, feature_maps)
 
     raw_metrics: list[tuple[_Candidate, dict[str, float]]] = []
-    for candidate in candidates:
+    for candidate in nms_candidates:
         metrics = _region_metrics(image, feature_maps, candidate.mask, candidate.bbox)
         metrics["mask_stability"] = _mask_stability(image, candidate.mask, candidate.bbox) if ablation.stability else 0.5
         metrics.update(_coherence_metrics(candidate.mask, feature_maps.anomaly_strength))
@@ -161,7 +204,13 @@ def propose_regions(
             metrics["scale_agreement"]=_binary_iou(candidate.mask>0,candidate.raw_mask>0)
         metrics["border_penalty"] = _border_penalty(candidate.mask, valid_area)
         bw=candidate.bbox[2]-candidate.bbox[0]; bh=candidate.bbox[3]-candidate.bbox[1]
-        if metrics["border_penalty"]>.75 and max(bw/max(bh,1),bh/max(bw,1))>5 and min(bw,bh)<min(height,width)*.08:
+        bottom_touch = candidate.bbox[3] >= height - max(4, int(height * border_margin * 1.5))
+        contextual_peak = max(metrics["local_texture_contrast"], metrics["local_colour_contrast"], metrics["local_entropy_contrast"])
+        if metrics["border_penalty"] > .55 or (bottom_touch and contextual_peak < .35):
+            rejection_reasons["border_evidence"] = rejection_reasons.get("border_evidence", 0) + 1
+            continue
+        if cv2.countNonZero(candidate.mask) < int(min_pixels * 1.5) and contextual_peak < .45:
+            rejection_reasons["tiny_low_evidence"] = rejection_reasons.get("tiny_low_evidence", 0) + 1
             continue
         raw_metrics.append((candidate, metrics))
     calibrated = _robust_calibrate([metrics for _, metrics in raw_metrics])
@@ -181,9 +230,14 @@ def propose_regions(
         evidence_score, reliability_score, score, contributions = score_architecture(
             evidence, reliability, metrics["area_relevance"], normalized["novelty"]
         )
+        compact_exception = max(metrics["local_colour_contrast"], metrics["local_texture_contrast"]) >= .08
+        if cv2.countNonZero(candidate.mask) / image_area < .001 and evidence_score < 70 and not compact_exception:
+            rejection_reasons["tiny_below_exceptional_evidence"] = rejection_reasons.get("tiny_below_exceptional_evidence", 0) + 1
+            continue
         score *= 1.0 - 0.55 * metrics["border_penalty"]
         scored.append((score, candidate, metrics, evidence_score, reliability_score, contributions))
     scored.sort(key=lambda item: item[0], reverse=True)
+    ranked_count = len(scored)
     scored = scored[:max_regions]
 
     proposals: list[RegionProposal] = []
@@ -198,7 +252,10 @@ def propose_regions(
         context_mask = _context_ring(candidate.mask)
         cv2.imwrite(str(context_mask_path), context_mask)
         combined_mask = cv2.bitwise_or(combined_mask, candidate.mask)
-        x1, y1, x2, y2 = candidate.bbox
+        final_bbox = _bbox_from_mask(candidate.mask)
+        assert final_bbox is not None, "Every final candidate must have a non-empty mask."
+        candidate.bbox = final_bbox
+        x1, y1, x2, y2 = final_bbox
         contour_list, _ = cv2.findContours(candidate.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         area = int(cv2.countNonZero(candidate.mask))
         perimeter = sum(cv2.arcLength(c, True) for c in contour_list)
@@ -207,7 +264,7 @@ def propose_regions(
         explanation = _explain(metrics, aspect, metrics["mask_stability"], area / image_area)
         priority = PriorityResult(round(score, 1), priority_label(score), explanation)
         proposals.append(RegionProposal(
-            region_id, candidate.bbox, area, area / image_area, aspect, float(perimeter),
+            region_id, final_bbox, area, area / image_area, aspect, float(perimeter),
             metrics["edge_density"], metrics["texture_variation"], metrics["colour_difference"],
             metrics["gradient_strength"], metrics["entropy"], metrics["contrast_difference"],
             metrics["mask_stability"], metrics["local_texture_contrast"], metrics["local_colour_contrast"],
@@ -219,11 +276,32 @@ def propose_regions(
 
     combined_mask_path = MASK_DIR / f"{image_stem}_combined_mask.png"
     cv2.imwrite(str(combined_mask_path), combined_mask)
-    overlay_path = OUTPUT_DIR / f"{image_stem}_{uuid4().hex[:8]}_region_proposals.png"
-    cv2.imwrite(str(overlay_path), _render_overlay(image, proposals))
+    visualization_paths = {}
+    for mode in ("boxes only", "masks only", "boxes + masks"):
+        path = OUTPUT_DIR / f"{image_stem}_{mode.replace(' ', '_').replace('+', 'and')}.png"
+        cv2.imwrite(str(path), _render_overlay(image, proposals, mode))
+        visualization_paths[mode] = path
+    overlay_path = visualization_paths["boxes + masks"]
     comparison_paths, comparison_counts = _baseline_comparison(image, feature_maps, proposals, image_stem)
-    diagnostics = ProposalDiagnostics(raw_count, filtered_count, len(candidates), threshold, tuple(p.priority.score for p in proposals))
-    return ProposalResult(proposals, overlay_path, combined_mask_path, diagnostics, comparison_paths, comparison_counts)
+    stage_candidates = {
+        "raw_components": raw_candidates, "area_border_filtering": filtered, "candidate_splitting": split_candidates,
+        "candidate_merging": merged, "overlap_suppression": nms_candidates,
+    }
+    stage_paths = _save_stage_overlays(image, stage_candidates, image_stem)
+    diagnostics = ProposalDiagnostics(
+        len(raw_candidates), len(filtered), len(split_candidates), len(merged), len(nms_candidates), ranked_count,
+        len(proposals), rejection_reasons.get("area", 0),
+        rejection_reasons.get("border_band", 0) + rejection_reasons.get("border_evidence", 0),
+        len(overlap_rejected), split_operations, merged_count, threshold,
+        tuple(p.priority.score for p in proposals), rejection_reasons, stage_paths,
+    )
+    assert diagnostics.after_merging <= diagnostics.after_splitting
+    assert diagnostics.final_count <= max_regions
+    for proposal in proposals:
+        mask = cv2.imread(str(proposal.mask_path), cv2.IMREAD_GRAYSCALE)
+        assert mask is not None and cv2.countNonZero(mask) > 0
+        assert _bbox_from_mask(mask) == proposal.bbox
+    return ProposalResult(proposals, overlay_path, combined_mask_path, diagnostics, comparison_paths, comparison_counts, visualization_paths)
 
 
 def _fused_multiscale_mask(image: np.ndarray, fm: FeatureMaps, valid_area: np.ndarray, ablation: AblationConfig) -> tuple[np.ndarray, float, int]:
@@ -243,7 +321,7 @@ def _fused_multiscale_mask(image: np.ndarray, fm: FeatureMaps, valid_area: np.nd
     fused_strength = cv2.normalize(0.58 * fm.anomaly_strength + 32.0 * votes + 85.0 * tile_score, None, 0, 255, cv2.NORM_MINMAX)
     heat_threshold = float(np.percentile(fused_strength, 82))
     minimum_votes = 2.0 if len(sources) > 3 else 1.0
-    seed = ((fused_strength >= heat_threshold) & (votes >= minimum_votes) & (valid_area > 0)).astype(np.uint8) * 255
+    seed = ((fused_strength >= heat_threshold) & (votes >= minimum_votes)).astype(np.uint8) * 255
     raw_count = cv2.connectedComponents(seed)[0] - 1
     fused = np.zeros_like(seed)
     scales = (0.008, 0.018, 0.04) if ablation.multi_scale_fusion else (0.018,)
@@ -253,7 +331,6 @@ def _fused_multiscale_mask(image: np.ndarray, fm: FeatureMaps, valid_area: np.nd
         scale_mask = cv2.morphologyEx(seed, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
         scale_mask = cv2.morphologyEx(scale_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
         fused = cv2.bitwise_or(fused, scale_mask)
-    fused = cv2.bitwise_and(fused, valid_area)
     return fused, heat_threshold, raw_count
 
 
@@ -290,6 +367,154 @@ def _tile_score_map(image: np.ndarray, fm: FeatureMaps) -> np.ndarray:
 def _components(mask: np.ndarray) -> list[_Candidate]:
     count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
     return [_Candidate((labels == i).astype(np.uint8) * 255, (int(stats[i,0]), int(stats[i,1]), int(stats[i,0]+stats[i,2]), int(stats[i,1]+stats[i,3]))) for i in range(1, count)]
+
+
+def _filter_reason(
+    candidate: _Candidate, minimum: int, image_area: int, max_relative: float,
+    valid_area: np.ndarray, fm: FeatureMaps,
+) -> str | None:
+    area = cv2.countNonZero(candidate.mask)
+    if area < minimum or area / image_area > max_relative:
+        return "area"
+    bbox = _bbox_from_mask(candidate.mask)
+    if bbox is None or min(bbox[2] - bbox[0], bbox[3] - bbox[1]) < 3:
+        return "invalid_geometry"
+    invalid_fraction = np.count_nonzero((candidate.mask > 0) & (valid_area == 0)) / max(area, 1)
+    near_invalid = cv2.dilate((valid_area == 0).astype(np.uint8), np.ones((11, 11), np.uint8)) > 0
+    near_fraction = np.count_nonzero((candidate.mask > 0) & near_invalid) / max(area, 1)
+    context_strength = max(
+        _masked_mean(fm.texture_variation, candidate.mask),
+        _masked_mean(fm.color_variation, candidate.mask),
+        _masked_mean(fm.sobel_gradient, candidate.mask),
+    ) / 255.0
+    if invalid_fraction > .25 or (near_fraction > .72 and context_strength < .58):
+        return "border_band"
+    return None
+
+
+def _finalize_candidate(candidate: _Candidate, minimum: int) -> _Candidate | None:
+    mask = cv2.morphologyEx(candidate.mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+    components = _components(mask)
+    if not components:
+        return None
+    dominant = max(components, key=lambda item: cv2.countNonZero(item.mask))
+    if cv2.countNonZero(dominant.mask) < max(10, minimum // 3):
+        return None
+    cleaned = _fill_small_holes(dominant.mask, max_hole=max(16, cv2.countNonZero(dominant.mask) // 30))
+    bbox = _bbox_from_mask(cleaned)
+    return _Candidate(cleaned, bbox, candidate.raw_mask if candidate.raw_mask is not None else candidate.mask) if bbox else None
+
+
+def _fill_small_holes(mask: np.ndarray, max_hole: int) -> np.ndarray:
+    inverse = cv2.bitwise_not(mask)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(inverse, 8)
+    output = mask.copy()
+    h, w = mask.shape
+    for index in range(1, count):
+        x, y, bw, bh, area = stats[index]
+        touches_frame = x == 0 or y == 0 or x + bw >= w or y + bh >= h
+        if not touches_frame and area <= max_hole:
+            output[labels == index] = 255
+    return output
+
+
+def _merge_overlapping_candidates(candidates: list[_Candidate], fm: FeatureMaps) -> tuple[list[_Candidate], int]:
+    items = candidates[:]
+    removed = 0
+    changed = True
+    while changed:
+        changed = False
+        for left in range(len(items)):
+            for right in range(left + 1, len(items)):
+                overlap = _mask_overlap(items[left].mask, items[right].mask)
+                containment = _bbox_containment(items[left].bbox, items[right].bbox)
+                if overlap < .24 and containment < .72:
+                    continue
+                union = cv2.bitwise_or(items[left].mask, items[right].mask)
+                bbox = _bbox_from_mask(union)
+                if bbox is None:
+                    continue
+                coherence = _coherence_metrics(union, fm.anomaly_strength)["coherence_score"]
+                if coherence < .44:
+                    continue
+                raw_left = items[left].raw_mask if items[left].raw_mask is not None else items[left].mask
+                raw_right = items[right].raw_mask if items[right].raw_mask is not None else items[right].mask
+                items[left] = _Candidate(union, bbox, cv2.bitwise_or(raw_left, raw_right))
+                items.pop(right)
+                removed += 1
+                changed = True
+                break
+            if changed:
+                break
+    return items, removed
+
+
+def _suppress_overlaps(
+    candidates: list[_Candidate], image: np.ndarray, fm: FeatureMaps,
+) -> tuple[list[_Candidate], list[_Candidate]]:
+    ordered = sorted(candidates, key=lambda item: _candidate_quality(image, fm, item), reverse=True)
+    kept: list[_Candidate] = []
+    rejected: list[_Candidate] = []
+    for candidate in ordered:
+        duplicate = any(
+            _bbox_iou(candidate.bbox, selected.bbox) > .28
+            or _bbox_containment(candidate.bbox, selected.bbox) > .68
+            or _mask_overlap(candidate.mask, selected.mask) > .18
+            for selected in kept
+        )
+        (rejected if duplicate else kept).append(candidate)
+    return kept, rejected
+
+
+def _candidate_quality(image: np.ndarray, fm: FeatureMaps, candidate: _Candidate) -> float:
+    metrics = _region_metrics(image, fm, candidate.mask, candidate.bbox)
+    coherence = _coherence_metrics(candidate.mask, fm.anomaly_strength)["coherence_score"]
+    contextual = (
+        .34 * metrics["local_texture_contrast"] + .30 * metrics["local_colour_contrast"]
+        + .18 * metrics["local_entropy_contrast"] + .18 * metrics["gradient_contrast"]
+    )
+    return contextual * (.55 + .45 * coherence)
+
+
+def _mask_overlap(left: np.ndarray, right: np.ndarray) -> float:
+    intersection = np.count_nonzero((left > 0) & (right > 0))
+    return intersection / max(min(cv2.countNonZero(left), cv2.countNonZero(right)), 1)
+
+
+def _bbox_containment(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> float:
+    x1, y1 = max(left[0], right[0]), max(left[1], right[1])
+    x2, y2 = min(left[2], right[2]), min(left[3], right[3])
+    intersection = max(0, x2 - x1) * max(0, y2 - y1)
+    return intersection / max(min(_bbox_area(left), _bbox_area(right)), 1)
+
+
+def _bbox_area(bbox: tuple[int, int, int, int]) -> int:
+    return max(0, bbox[2] - bbox[0]) * max(0, bbox[3] - bbox[1])
+
+
+def _bbox_from_mask(mask: np.ndarray) -> tuple[int, int, int, int] | None:
+    ys, xs = np.where(mask > 0)
+    if not xs.size:
+        return None
+    return int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1)
+
+
+def _save_stage_overlays(
+    image: np.ndarray, stages: dict[str, list[_Candidate]], stem: str,
+) -> dict[str, Path]:
+    paths = {}
+    for stage, candidates in stages.items():
+        view = image.copy()
+        for index, candidate in enumerate(candidates[:80], 1):
+            x1, y1, x2, y2 = candidate.bbox
+            cv2.rectangle(view, (x1, y1), (x2, y2), (80, 210, 255), 1)
+            if index <= 20:
+                cv2.putText(view, str(index), (x1, max(12, y1 - 2)), cv2.FONT_HERSHEY_SIMPLEX, .35, (255, 255, 255), 1)
+        path = OUTPUT_DIR / f"{stem}_stage_{stage}.png"
+        cv2.imwrite(str(path), view)
+        paths[stage] = path
+    return paths
 
 
 def _keep_candidate(c: _Candidate, minimum: int, image_area: int, max_relative: float, width: int, height: int, fm: FeatureMaps) -> bool:
@@ -362,7 +587,10 @@ def _region_metrics(image: np.ndarray, fm: FeatureMaps, mask: np.ndarray, bbox: 
         "entropy": min(entropy,1.0), "area_relevance": area_relevance,
         "contrast_difference": min(abs(float(np.std(gray_values))-float(np.std(outer)))/64,1.0),
         "local_texture_contrast": min(abs(texture_inside-texture_ring)/80,1.0),
-        "local_colour_contrast": min(float(np.linalg.norm(candidate_lab-ring_lab))/60,1.0),
+        "local_colour_contrast": max(
+            min(float(np.linalg.norm(candidate_lab-ring_lab))/60,1.0),
+            _masked_mean(fm.color_variation, mask)/255,
+        ),
         "local_entropy_contrast": min(abs(candidate_entropy-ring_entropy),1.0),
         "internal_vs_boundary_edge_ratio": min(edge_internal/max(edge_boundary,1.0),2.0)/2.0,
         "gradient_contrast": min(abs(gradient_inside-gradient_ring)/100,1.0),
@@ -539,18 +767,22 @@ def _explain(m: dict[str,float], aspect: float, stability: float, relative_area:
     return ", ".join(reasons) if reasons else "combined multi-feature anomaly evidence"
 
 
-def _render_overlay(image: np.ndarray, proposals: list[RegionProposal]) -> np.ndarray:
-    overlay=image.copy(); tint=image.copy()
-    for p in proposals:
-        mask = cv2.imread(str(p.mask_path), cv2.IMREAD_GRAYSCALE)
-        if mask is not None:
-            tint[mask > 0] = (0,170,255)
-    overlay=cv2.addWeighted(overlay,.72,tint,.28,0)
-    for p in proposals:
-        x1,y1,x2,y2=p.bbox; cv2.rectangle(overlay,(x1,y1),(x2,y2),(0,210,255),2)
-        label=p.region_id
-        cv2.circle(overlay,(x1+18,max(18,y1+18)),17,(0,160,220),-1)
-        cv2.putText(overlay,label,(x1+2,max(23,y1+23)),cv2.FONT_HERSHEY_SIMPLEX,.43,(255,255,255),1)
+def _render_overlay(image: np.ndarray, proposals: list[RegionProposal], mode: str = "boxes + masks") -> np.ndarray:
+    overlay = image.copy()
+    if mode in {"masks only", "boxes + masks"}:
+        tint = image.copy()
+        palette = [(0, 170, 255), (80, 200, 100), (220, 130, 70), (180, 90, 210)]
+        for index, proposal in enumerate(proposals):
+            mask = cv2.imread(str(proposal.mask_path), cv2.IMREAD_GRAYSCALE)
+            if mask is not None:
+                tint[mask > 0] = palette[index % len(palette)]
+        overlay = cv2.addWeighted(overlay, .76, tint, .24, 0)
+    if mode in {"boxes only", "boxes + masks"}:
+        for proposal in proposals:
+            x1, y1, x2, y2 = proposal.bbox
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 210, 255), 2)
+            cv2.rectangle(overlay, (x1, y1), (min(x1 + 42, x2), min(y1 + 18, y2)), (0, 150, 220), -1)
+            cv2.putText(overlay, proposal.region_id, (x1 + 2, min(y1 + 14, y2 - 2)), cv2.FONT_HERSHEY_SIMPLEX, .42, (255, 255, 255), 1)
     return overlay
 
 

@@ -129,6 +129,20 @@ The proposal engine keeps feature evidence separate long enough to avoid depende
 
 The dense feature and tile evidence is thresholded by image-specific percentiles. Three morphological scales preserve small spots, elongated lines, and broad irregular regions. Connected components are filtered by relative area and border/specular evidence, then merged using bounding-box IoU, center distance, morphological connectivity, and texture/color similarity. Large low-coherence masks are split from internal heatmap peaks. Every surviving region is compared with a dilated context ring using local texture, Lab colour, entropy, gradient, and internal-versus-boundary edge contrasts.
 
+The candidate lifecycle is explicit and monotonic where required:
+
+```text
+raw components
+→ area and border filtering
+→ coherence splitting and mask refinement
+→ overlap/nesting merge
+→ non-maximum overlap suppression
+→ contextual ranking sanity filters
+→ top-K selection (default: 8)
+```
+
+Diagnostics report every stage separately. Runtime assertions enforce that merging cannot increase the split count, the final count cannot exceed top-K, every final mask is non-empty, and every exported proposal box is derived from its final refined mask. The optional debug panel shows stage overlays, rejection reasons, and counts removed by area, border, and overlap rules.
+
 ### Three-Score Architecture
 
 Anomaly evidence is deliberately separate from segmentation reliability:
@@ -146,6 +160,8 @@ P = 100 * (u_e E/100 + u_r R/100 + u_a A_r + u_n N) / Σu_P
 The valid-image model detects black/near-uniform letterbox bands and applies a configurable exclusion margin. Boundary occupancy produces a border penalty, while thin frame-parallel regions are suppressed. Genuine edge-touching regions can remain when their internal evidence is coherent.
 
 Raw masks are refined with bilateral heatmap filtering, adaptive/local percentile thresholds, opening/closing, hole filling, and small-component removal. Reports include area reduction, scale agreement, coherence, fragmentation, solidity-derived smoothness, raw masks, refined masks, and context rings. Reviewers can adjust boxes, select raw/refined masks, erode or dilate, remove small components, and invert a bounded mask before saving the corrected reference.
+
+Final proposal masks retain the dominant connected component, fill only small enclosed holes, smooth short boundary irregularities, and recompute their bounding boxes after cleanup. Broad regions with low internal heatmap coherence are split or rejected. Strong containment and overlap suppression prevents nested duplicates from reaching the final ranking.
 
 ## Baseline Comparison
 

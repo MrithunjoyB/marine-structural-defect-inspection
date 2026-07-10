@@ -144,7 +144,7 @@ def main() -> None:
             "min_relative_area": st.slider("Minimum relative area", 0.0001, 0.0200, 0.0002, 0.0001, format="%.4f"),
             "max_relative_area": st.slider("Maximum relative area", 0.10, 0.95, 0.85, 0.05),
             "border_margin": st.slider("Border exclusion margin", 0.0, 0.10, 0.025, 0.005),
-            "max_regions": st.slider("Maximum regions", 3, 60, 20, 1),
+            "max_regions": st.slider("Maximum final regions", 3, 20, 8, 1),
             "yolo_confidence": st.slider("YOLO confidence", 0.10, 0.90, 0.35, 0.05),
         }
         with st.expander("Ablation switches"):
@@ -228,16 +228,32 @@ def main() -> None:
         if proposal_result is None:
             st.info("Run analysis to create region proposals.")
         else:
-            st.image(proposal_result.overlay_path.as_posix(), caption="Highlighted visual anomaly candidates", use_container_width=True)
-            diagnostic_cols = st.columns(5)
+            visualization_mode = st.radio("Proposal visualization", ["boxes only", "masks only", "boxes + masks"], horizontal=True)
+            st.image(proposal_result.visualization_paths[visualization_mode].as_posix(), caption="Final ranked visual anomaly candidates", use_container_width=True)
             diagnostics = proposal_result.diagnostics
-            diagnostic_cols[0].metric("Raw components", diagnostics.raw_components)
-            diagnostic_cols[1].metric("After filtering", diagnostics.after_filtering)
-            diagnostic_cols[2].metric("After merging", diagnostics.after_merging)
-            diagnostic_cols[3].metric("Heat threshold", f"{diagnostics.heatmap_threshold:.1f}")
-            median_score = float(pd.Series(diagnostics.score_distribution).median()) if diagnostics.score_distribution else 0.0
-            diagnostic_cols[4].metric("Median score", f"{median_score:.1f}")
+            stage_counts = [
+                ("Raw", diagnostics.raw_components), ("Filtered", diagnostics.after_filtering),
+                ("Split", diagnostics.after_splitting), ("Merged", diagnostics.after_merging),
+                ("NMS", diagnostics.after_overlap_suppression), ("Ranked", diagnostics.ranked_count),
+                ("Top-K", diagnostics.final_count),
+            ]
+            for start in range(0, len(stage_counts), 4):
+                cols = st.columns(min(4, len(stage_counts) - start))
+                for col, (label, value) in zip(cols, stage_counts[start:start + 4]):
+                    col.metric(label, value)
             st.dataframe(pd.DataFrame([proposal.to_row() for proposal in proposal_result.proposals]), use_container_width=True)
+            show_debug = st.checkbox("Display rejected/noisy candidate stages", value=False)
+            if show_debug:
+                st.caption("Pipeline debug panel")
+                removed = st.columns(5)
+                removed[0].metric("Area removed", diagnostics.removed_by_area)
+                removed[1].metric("Border removed", diagnostics.removed_by_border)
+                removed[2].metric("Overlap removed", diagnostics.removed_by_overlap)
+                removed[3].metric("Split operations", diagnostics.split_operations)
+                removed[4].metric("Merged", diagnostics.merged_candidates)
+                st.json(diagnostics.rejection_reasons)
+                for stage, path in diagnostics.stage_overlay_paths.items():
+                    st.image(path.as_posix(), caption=f"{stage.replace('_', ' ').title()}", use_container_width=True)
             st.caption("Algorithm comparison")
             comparison_cols = st.columns(4)
             for col, (name, path) in zip(comparison_cols, proposal_result.comparison_paths.items()):

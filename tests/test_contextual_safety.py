@@ -11,7 +11,8 @@ from dataset_export import export_dataset
 from evaluation import evaluate_method
 from feature_extraction import extract_feature_maps
 from labeling import ReviewedAnnotation, build_annotation
-from region_proposal import _split_candidate, _Candidate, propose_regions
+from region_proposal import _bbox_from_mask, _split_candidate, _suppress_overlaps, _Candidate, propose_regions
+from scoring import score_architecture
 
 
 class ContextualSafetyTests(unittest.TestCase):
@@ -54,6 +55,31 @@ class ContextualSafetyTests(unittest.TestCase):
         metrics=evaluate_method([(0,0,10,10)],[(0,0,10,10)],image_name="case",method="exact")
         self.assertEqual(metrics.proposal_recall_iou_050,1.0); self.assertEqual(metrics.average_best_iou,1.0)
         self.assertEqual(metrics.area_over_coverage_ratio,0.0); self.assertEqual(metrics.area_under_coverage_ratio,0.0)
+
+    def test_pipeline_counts_and_final_masks_are_consistent(self):
+        image=np.full((240,400,3),155,np.uint8); cv2.line(image,(30,180),(370,60),(35,35,35),7)
+        result=propose_regions(image,extract_feature_maps(image),"pipeline_order",min_area=20,max_regions=5)
+        diagnostics=result.diagnostics
+        self.assertLessEqual(diagnostics.after_merging,diagnostics.after_splitting)
+        self.assertLessEqual(diagnostics.after_overlap_suppression,diagnostics.after_merging)
+        self.assertLessEqual(diagnostics.final_count,5)
+        for proposal in result.proposals:
+            mask=cv2.imread(str(proposal.mask_path),0)
+            self.assertGreater(cv2.countNonZero(mask),0); self.assertEqual(_bbox_from_mask(mask),proposal.bbox)
+
+    def test_overlapping_duplicates_do_not_survive_nms(self):
+        image=np.full((160,240,3),150,np.uint8); fm=extract_feature_maps(image)
+        first=np.zeros(image.shape[:2],np.uint8); first[40:110,50:160]=255
+        second=np.zeros_like(first); second[45:105,55:155]=255
+        kept,rejected=_suppress_overlaps([_Candidate(first,(50,40,160,110)),_Candidate(second,(55,45,155,105))],image,fm)
+        self.assertEqual(len(kept),1); self.assertEqual(len(rejected),1)
+
+    def test_contextual_evidence_dominates_stability(self):
+        low_evidence=score_architecture({"local_texture_contrast":0,"local_colour_contrast":0,"local_entropy_contrast":0,"edge_concentration":0,"gradient_contrast":0,"geometric_irregularity":0},
+            {"perturbation_stability":1,"connectedness":1,"boundary_smoothness":1,"scale_agreement":1,"segmentation_coherence":1},.2,0)[2]
+        high_evidence=score_architecture({"local_texture_contrast":1,"local_colour_contrast":1,"local_entropy_contrast":1,"edge_concentration":1,"gradient_contrast":1,"geometric_irregularity":1},
+            {"perturbation_stability":0,"connectedness":0,"boundary_smoothness":0,"scale_agreement":0,"segmentation_coherence":0},.2,0)[2]
+        self.assertGreater(high_evidence,low_evidence)
 
 
 if __name__=="__main__": unittest.main()
