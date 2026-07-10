@@ -4,6 +4,10 @@
 
 StructVision-AI is a computer vision prototype for analyzing structural, component, product, and surface images before labeled training data is available. Instead of pretending to be a trained defect classifier, it uses classical feature extraction and visual anomaly region proposal to help a human reviewer build a labeled dataset for future YOLO or segmentation-model training.
 
+## Problem Definition
+
+The research problem is proposal generation under weak prior knowledge: identify compact, reviewable surface regions that differ from their local structural context without claiming a defect class. Visual saliency and anomaly detection are not equivalent. A weld bead, plate boundary, or repeating texture may be highly salient but normal; an anomaly must differ statistically from an appropriate surrounding context.
+
 The system remains suitable for Ocean Engineering, Naval Architecture, industrial inspection, and surface quality workflows, while staying general enough for many component or material images.
 
 ## Why This Is Not Just a YOLO Detector
@@ -119,30 +123,49 @@ These are candidate labels for dataset creation, not trained predictions.
 
 Legacy modules from the earlier prototype may remain for backward compatibility, but the main architecture is the StructVision-AI module set above.
 
-## Region-Proposal Methodology
+## Contextual Region-Proposal Methodology
 
 The proposal engine keeps feature evidence separate long enough to avoid dependence on one contour mask. It creates independent percentile masks for Canny edges, Sobel magnitude, Laplacian response, local intensity variance, LBP deviation, Lab color difference, foreground segmentation, and the fused heatmap. Overlapping tiles are evaluated at approximately 8%, 16%, and 28% of the shorter image dimension. Their normalized measurements are projected back to a dense patch-score map.
 
-The dense feature and tile evidence is thresholded by image-specific percentiles. Three morphological scales preserve small spots, elongated lines, and broad irregular regions. Connected components are filtered by relative area and border/specular evidence, then merged using bounding-box IoU, center distance, morphological connectivity, and texture/color similarity. This is intended to produce one reviewable region for a visually continuous weld instead of many tiny boxes.
+The dense feature and tile evidence is thresholded by image-specific percentiles. Three morphological scales preserve small spots, elongated lines, and broad irregular regions. Connected components are filtered by relative area and border/specular evidence, then merged using bounding-box IoU, center distance, morphological connectivity, and texture/color similarity. Large low-coherence masks are split from internal heatmap peaks. Every surviving region is compared with a dilated context ring using local texture, Lab colour, entropy, gradient, and internal-versus-boundary edge contrasts.
 
-The configurable score is:
+### Three-Score Architecture
+
+Anomaly evidence is deliberately separate from segmentation reliability:
 
 ```text
-S = 100 * (w_e E + w_t T + w_c C + w_g G + w_h H + w_a A + w_s S_m) / sum(w)
+E = 100 * (w_t ΔT + w_c ΔC + w_h ΔH + w_e E_i + w_g ΔG + w_q Q_g) / Σw_E
+R = 100 * (v_s S_p + v_c C_n + v_b B_s + v_a A_s + v_q Q_s) / Σv_R
+P = 100 * (u_e E/100 + u_r R/100 + u_a A_r + u_n N) / Σu_P
 ```
 
-Here `E` is normalized edge density, `T` texture variation, `C` Lab color difference, `G` gradient strength, `H` entropy, `A` area relevance, and `S_m` perturbation mask stability. Default weights are defined in `scoring.DEFAULT_SCORE_WEIGHTS` and can be overridden through `propose_regions(..., score_weights=...)`.
+`ΔT`, `ΔC`, `ΔH`, and `ΔG` are candidate-to-context differences; `E_i` is internal edge concentration and `Q_g` is geometric irregularity. Reliability uses perturbation stability `S_p`, connectedness `C_n`, boundary smoothness `B_s`, scale agreement `A_s`, and segmentation coherence `Q_s`. Priority combines evidence, reliability, area relevance `A_r`, and contextual novelty `N`. Candidate features are robustly calibrated by median/IQR with clipping. Configurable defaults live in `scoring.py`; stability cannot directly dominate anomaly evidence.
+
+### Border Suppression And Mask Refinement
+
+The valid-image model detects black/near-uniform letterbox bands and applies a configurable exclusion margin. Boundary occupancy produces a border penalty, while thin frame-parallel regions are suppressed. Genuine edge-touching regions can remain when their internal evidence is coherent.
+
+Raw masks are refined with bilateral heatmap filtering, adaptive/local percentile thresholds, opening/closing, hole filling, and small-component removal. Reports include area reduction, scale agreement, coherence, fragmentation, solidity-derived smoothness, raw masks, refined masks, and context rings. Reviewers can adjust boxes, select raw/refined masks, erode or dilate, remove small components, and invert a bounded mask before saving the corrected reference.
 
 ## Baseline Comparison
 
-The Region Proposals tab reports contour-only, fixed-threshold heatmap, and multi-scale fused outputs side by side. It also displays raw connected-component count, count after filtering, count after merging, the adaptive heatmap threshold, and score-distribution statistics. These baselines are diagnostic references, not alternate export paths.
+The Region Proposals tab reports four definitions: contour-only (Canny contours), fixed-threshold (`heatmap > 128`), raw multi-scale fused masks, and refined contextual multi-scale masks. It also displays component counts, adaptive threshold, score distributions, evidence/reliability/priority scores, feature contributions, border penalty, and coherence.
 
 ## Proposal Evaluation
 
-`evaluation.py` treats manually reviewed boxes as references and computes proposal recall at a configurable IoU threshold, average best IoU, false proposals per image, reference-region coverage, and annotation acceptance rate. Synthetic regression tests cover a long irregular weld, thin crack-like line, pitting-like spots, a broad color change, a clean surface, and a lighting gradient:
+`evaluation.py` treats accepted, intentionally labelled, manually corrected regions as references. Per-image and dataset tables include recall at IoU 0.10/0.25/0.50, average best IoU, mask Dice/IoU, false and accepted proposals per image, acceptance rate, area over/under-coverage, correction count, and estimated review time. CSV export is available in Dataset Export.
+
+## Ablation Design
+
+The sidebar can disable edge, texture, colour, entropy, stability, contextual contrast, multi-scale fusion, region merging, or mask refinement. Each run appends its switches and diagnostics to `outputs/ablation_results.csv`, enabling controlled comparisons without changing the export contract.
+
+## Synthetic Benchmark
+
+`synthetic_benchmark.py` generates known masks for cracks, weld disturbances, pitting clusters, colour-only and texture-only anomalies, normal texture, illumination gradients, black borders, specular highlights, and noise/blur. It evaluates all four proposal methods automatically:
 
 ```bash
 python -m unittest discover -s tests -p 'test_*.py' -v
+python synthetic_benchmark.py
 ```
 
 ## Setup
@@ -251,6 +274,9 @@ docs/screenshots/dataset_export.png
 - Percentile thresholds are image-relative, so a uniformly damaged image or a frame with no normal background can still be ambiguous.
 - Perturbation stability measures repeatability of classical saliency, not physical defect persistence.
 - Synthetic tests exercise geometry and nuisance conditions but do not replace evaluation on reviewed field imagery.
+- Context rings can contain another anomaly or cross a material boundary, biasing local contrast.
+- Heatmap-peak splitting is heuristic and may divide one heterogeneous defect or retain a weak bridge.
+- Review-time estimates require multiple reliable timestamps and do not measure reviewer cognitive effort.
 - YOLO inference requires a trained `models/best.pt`.
 - Segmentation polygon export currently uses bounding-box polygons unless refined masks are added later.
 - Video frame extraction is a planned extension, not an automatic processing path in the current app.

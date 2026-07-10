@@ -20,7 +20,10 @@ def export_dataset(
 ) -> dict[str, Path]:
     """Export accepted reviewed annotations in CSV, JSON, YOLO box, and YOLO segment formats."""
 
-    label_classes = label_classes or [name for name in DEFAULT_LABEL_CLASSES if name != "ignore"]
+    label_classes = label_classes or [name for name in DEFAULT_LABEL_CLASSES if name not in {"ignore", "unassigned"}]
+    invalid = [ann.region_id for ann in annotations if ann.accepted and ann.label in {"", "unassigned", "ignore"}]
+    if invalid:
+        raise ValueError(f"Accepted regions require an intentional label before export: {', '.join(invalid)}")
     DATASET_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     DATASET_LABEL_DIR.mkdir(parents=True, exist_ok=True)
     DATASET_MASK_DIR.mkdir(parents=True, exist_ok=True)
@@ -28,7 +31,7 @@ def export_dataset(
     copied_image = DATASET_IMAGE_DIR / image_path.name
     shutil.copy2(image_path, copied_image)
 
-    accepted = [ann for ann in annotations if ann.accepted and ann.label != "ignore"]
+    accepted = [ann for ann in annotations if ann.accepted and ann.label not in {"ignore", "unassigned"}]
     image_height, image_width = image_shape
     stem = image_path.stem
     yolo_box_path = DATASET_LABEL_DIR / f"{stem}.txt"

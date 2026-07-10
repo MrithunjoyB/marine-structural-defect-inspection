@@ -21,6 +21,7 @@ PROJECT_TITLE = "StructVision-AI"
 PROJECT_SUBTITLE = "Foundation-Model-Assisted Visual Inspection and Dataset Generation for Structural Surface Anomalies"
 
 DEFAULT_LABEL_CLASSES = [
+    "unassigned",
     "corrosion_candidate",
     "crack_candidate",
     "coating_damage_candidate",
@@ -32,7 +33,7 @@ DEFAULT_LABEL_CLASSES = [
     "ignore",
 ]
 
-YOLO_CLASS_NAMES = DEFAULT_LABEL_CLASSES[:-1]
+YOLO_CLASS_NAMES = [name for name in DEFAULT_LABEL_CLASSES if name not in {"unassigned", "ignore"}]
 
 for directory in [
     UPLOAD_DIR,

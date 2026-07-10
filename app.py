@@ -13,10 +13,11 @@ from PIL import Image
 
 from config import DEFAULT_LABEL_CLASSES, OUTPUT_DIR, PROJECT_SUBTITLE, PROJECT_TITLE, REPORT_DIR, UPLOAD_DIR
 from dataset_export import export_dataset
+from evaluation import evaluate_method, evaluation_tables
 from feature_extraction import extract_feature_maps, save_feature_maps
 from labeling import build_annotation
 from preprocess import apply_preprocessing
-from region_proposal import create_region_crops, propose_regions
+from region_proposal import AblationConfig, _components, correct_region_mask, create_region_crops, propose_regions
 from report import generate_pdf_report
 from yolo_inference import run_yolo_inference
 
@@ -50,6 +51,7 @@ def init_state() -> None:
         "annotations": [],
         "yolo_result": None,
         "preprocess_settings": {},
+        "evaluation_rows": [],
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -84,6 +86,14 @@ def run_analysis(uploaded_file, settings: dict[str, int | bool]) -> None:
         max_regions=int(settings["max_regions"]),
         min_relative_area=float(settings["min_relative_area"]),
         max_relative_area=float(settings["max_relative_area"]),
+        border_margin=float(settings["border_margin"]),
+        ablation=AblationConfig(
+            edge_features=bool(settings["use_edges"]), texture_features=bool(settings["use_texture"]),
+            colour_features=bool(settings["use_colour"]), entropy_features=bool(settings["use_entropy"]),
+            stability=bool(settings["use_stability"]), contextual_contrast=bool(settings["use_context"]),
+            multi_scale_fusion=bool(settings["use_multiscale"]), region_merging=bool(settings["use_merging"]),
+            mask_refinement=bool(settings["use_refinement"]),
+        ),
     )
     yolo_result = run_yolo_inference(processed, image_stem, confidence_threshold=float(settings["yolo_confidence"]))
 
@@ -96,6 +106,10 @@ def run_analysis(uploaded_file, settings: dict[str, int | bool]) -> None:
     st.session_state.yolo_result = yolo_result
     st.session_state.annotations = []
     st.session_state.preprocess_settings = settings
+    ablation_path=OUTPUT_DIR/"ablation_results.csv"
+    ablation_row={**settings,**proposal_result.diagnostics.to_dict(),"image":uploaded_file.name}
+    existing=pd.read_csv(ablation_path) if ablation_path.exists() else pd.DataFrame()
+    pd.concat([existing,pd.DataFrame([ablation_row])],ignore_index=True).to_csv(ablation_path,index=False)
 
 
 def main() -> None:
@@ -129,9 +143,18 @@ def main() -> None:
             "min_area": st.slider("Minimum region area", 50, 5000, 250, 50),
             "min_relative_area": st.slider("Minimum relative area", 0.0001, 0.0200, 0.0002, 0.0001, format="%.4f"),
             "max_relative_area": st.slider("Maximum relative area", 0.10, 0.95, 0.85, 0.05),
+            "border_margin": st.slider("Border exclusion margin", 0.0, 0.10, 0.025, 0.005),
             "max_regions": st.slider("Maximum regions", 3, 60, 20, 1),
             "yolo_confidence": st.slider("YOLO confidence", 0.10, 0.90, 0.35, 0.05),
         }
+        with st.expander("Ablation switches"):
+            settings.update({
+                "use_edges": st.checkbox("Edge features",True), "use_texture": st.checkbox("Texture features",True),
+                "use_colour": st.checkbox("Colour features",True), "use_entropy": st.checkbox("Entropy features",True),
+                "use_stability": st.checkbox("Stability",True), "use_context": st.checkbox("Contextual contrast",True),
+                "use_multiscale": st.checkbox("Multi-scale fusion",True), "use_merging": st.checkbox("Region merging",True),
+                "use_refinement": st.checkbox("Mask refinement",True),
+            })
 
         analyze = st.button("Analyze Selected Image", type="primary", use_container_width=True)
 
@@ -216,9 +239,23 @@ def main() -> None:
             diagnostic_cols[4].metric("Median score", f"{median_score:.1f}")
             st.dataframe(pd.DataFrame([proposal.to_row() for proposal in proposal_result.proposals]), use_container_width=True)
             st.caption("Algorithm comparison")
-            comparison_cols = st.columns(3)
+            comparison_cols = st.columns(4)
             for col, (name, path) in zip(comparison_cols, proposal_result.comparison_paths.items()):
                 col.image(path.as_posix(), caption=f"{name} | {proposal_result.comparison_counts[name]} regions", use_container_width=True)
+            for proposal in proposal_result.proposals:
+                with st.expander(f"{proposal.region_id} technical evidence"):
+                    mask_cols=st.columns(3)
+                    mask_cols[0].image(proposal.raw_mask_path.as_posix(),caption="Raw mask",clamp=True)
+                    mask_cols[1].image(proposal.mask_path.as_posix(),caption="Refined mask",clamp=True)
+                    mask_cols[2].image(proposal.context_mask_path.as_posix(),caption="Local context ring",clamp=True)
+                    score_cols=st.columns(4)
+                    score_cols[0].metric("Anomaly evidence",f"{proposal.anomaly_evidence_score:.1f}")
+                    score_cols[1].metric("Mask reliability",f"{proposal.mask_reliability_score:.1f}")
+                    score_cols[2].metric("Review priority",f"{proposal.priority.score:.1f}")
+                    score_cols[3].metric("Coherence",f"{proposal.coherence_score:.2f}")
+                    contribution=pd.DataFrame({"Feature":list(proposal.feature_contributions),"Contribution (%)":list(proposal.feature_contributions.values())})
+                    st.bar_chart(contribution.set_index("Feature"))
+                    st.caption(f"Border penalty {proposal.border_penalty:.3f} | area reduction {proposal.area_reduction*100:.1f}% | boundary smoothness {proposal.boundary_smoothness:.3f}")
             st.download_button(
                 "Download Combined Binary Mask",
                 proposal_result.combined_mask_path.read_bytes(),
@@ -248,12 +285,30 @@ def main() -> None:
                         "colour_difference": round(proposal.color_variation_score, 3), "gradient_strength": round(proposal.gradient_strength, 3),
                         "entropy": round(proposal.entropy, 3), "mask_stability": round(proposal.mask_stability, 3),
                     })
-                    accepted = st.checkbox("Accept region", value=proposal.priority.label in {"High", "Review Required"}, key=f"accept_{proposal.region_id}")
+                    decision = st.radio("Review decision",["uncertain","accept","reject"],horizontal=True,key=f"decision_{proposal.region_id}")
                     label = st.selectbox("Candidate label", DEFAULT_LABEL_CLASSES, key=f"label_{proposal.region_id}")
                     custom = st.text_input("Optional custom label", key=f"custom_{proposal.region_id}")
                     notes = st.text_area("Notes", key=f"notes_{proposal.region_id}", height=70)
+                    st.caption("Manual mask correction")
+                    x1,y1,x2,y2=proposal.bbox; bbox_cols=st.columns(4)
+                    corrected_bbox=(
+                        int(bbox_cols[0].number_input("x1",0,st.session_state.processed.shape[1]-1,x1,key=f"x1_{proposal.region_id}")),
+                        int(bbox_cols[1].number_input("y1",0,st.session_state.processed.shape[0]-1,y1,key=f"y1_{proposal.region_id}")),
+                        int(bbox_cols[2].number_input("x2",1,st.session_state.processed.shape[1],x2,key=f"x2_{proposal.region_id}")),
+                        int(bbox_cols[3].number_input("y2",1,st.session_state.processed.shape[0],y2,key=f"y2_{proposal.region_id}")),
+                    )
+                    correction_cols=st.columns(4)
+                    mask_source=correction_cols[0].selectbox("Mask source",["refined","raw"],key=f"source_{proposal.region_id}")
+                    morphology=correction_cols[1].slider("Erode / dilate",-4,4,0,key=f"morph_{proposal.region_id}")
+                    remove_small=correction_cols[2].number_input("Remove below",0,5000,0,25,key=f"small_{proposal.region_id}")
+                    invert=correction_cols[3].checkbox("Invert",False,key=f"invert_{proposal.region_id}")
+                    corrected_path,corrected_metrics=correct_region_mask(proposal,corrected_bbox,mask_source,morphology,int(remove_small),invert,st.session_state.image_path.stem)
+                    st.image(corrected_path.as_posix(),caption="Corrected annotation mask",clamp=True)
+                    st.json(corrected_metrics)
                     final_label = custom.strip() if custom.strip() else label
-                    annotations.append(build_annotation(st.session_state.image_name, proposal, accepted, final_label, notes))
+                    corrected=corrected_bbox!=proposal.bbox or mask_source!="refined" or morphology!=0 or remove_small!=0 or invert
+                    annotations.append(build_annotation(st.session_state.image_name,proposal,decision=="accept",final_label,notes,
+                        decision=decision,corrected_bbox=corrected_bbox,corrected_mask_path=str(corrected_path),mask_source="corrected" if corrected else "refined"))
             if st.button("Save Review Metadata", type="primary"):
                 st.session_state.annotations = annotations
                 st.success(f"Saved {len(annotations)} reviewed region records in session state.")
@@ -265,16 +320,43 @@ def main() -> None:
         elif not st.session_state.annotations:
             st.warning("Save review metadata first. Export uses accepted regions and their candidate labels.")
         else:
-            accepted = [ann for ann in st.session_state.annotations if ann.accepted and ann.label != "ignore"]
+            accepted = [ann for ann in st.session_state.annotations if ann.accepted and ann.label not in {"ignore","unassigned"}]
             st.metric("Accepted candidate regions", len(accepted))
             if st.button("Export Reviewed Dataset Files", type="primary"):
-                paths = export_dataset(
-                    st.session_state.image_path,
-                    st.session_state.processed.shape[:2],
-                    st.session_state.annotations,
-                )
-                st.success("Dataset export completed.")
-                st.json({name: path.as_posix() for name, path in paths.items()})
+                try:
+                    paths = export_dataset(st.session_state.image_path,st.session_state.processed.shape[:2],st.session_state.annotations)
+                    st.success("Dataset export completed.")
+                    st.json({name: path.as_posix() for name, path in paths.items()})
+                except ValueError as error:
+                    st.error(str(error))
+            st.caption("Annotation evaluation")
+            if st.button("Evaluate Proposal Methods"):
+                references=[ann.bbox for ann in st.session_state.annotations if ann.accepted and ann.label not in {"unassigned","ignore"}]
+                reference_masks=[]
+                for ann in st.session_state.annotations:
+                    if ann.accepted and ann.label not in {"unassigned","ignore"}:
+                        mask=cv2.imread(ann.mask_path,cv2.IMREAD_GRAYSCALE)
+                        if mask is not None: reference_masks.append(mask)
+                if not references:
+                    st.error("Accept and intentionally label at least one reviewed region before evaluation.")
+                else:
+                    fm=st.session_state.feature_maps; result=st.session_state.proposal_result
+                    raw_union=np.zeros(st.session_state.processed.shape[:2],np.uint8)
+                    for proposal in result.proposals:
+                        raw=cv2.imread(str(proposal.raw_mask_path),0)
+                        if raw is not None: raw_union=cv2.bitwise_or(raw_union,raw)
+                    methods={"contour-only":fm.contour_map,"fixed-threshold":((fm.anomaly_strength>128).astype(np.uint8)*255),
+                             "multi-scale-fused":raw_union,"refined-contextual":cv2.imread(str(result.combined_mask_path),0)}
+                    rows=[]
+                    for method,mask in methods.items():
+                        boxes=[item.bbox for item in _components(mask)]
+                        rows.append(evaluate_method(boxes,references,[mask],reference_masks,st.session_state.annotations,
+                            image_name=st.session_state.image_name,method=method))
+                    st.session_state.evaluation_rows=rows
+            if st.session_state.evaluation_rows:
+                per_image,dataset=evaluation_tables(st.session_state.evaluation_rows)
+                st.dataframe(per_image,use_container_width=True); st.dataframe(dataset,use_container_width=True)
+                st.download_button("Download Evaluation CSV",per_image.to_csv(index=False).encode(),"proposal_evaluation.csv","text/csv")
 
     with tabs[6]:
         st.subheader("Report Generation")
