@@ -92,6 +92,9 @@ These are candidate labels for dataset creation, not trained predictions.
 ├── scoring.py
 ├── labeling.py
 ├── dataset_export.py
+├── evaluation.py
+├── experiment_tracking.py
+├── synthetic_benchmark.py
 ├── yolo_inference.py
 ├── report.py
 ├── train.py
@@ -170,6 +173,35 @@ The Region Proposals tab reports four definitions: contour-only (Canny contours)
 ## Proposal Evaluation
 
 `evaluation.py` treats accepted, intentionally labelled, manually corrected regions as references. Per-image and dataset tables include recall at IoU 0.10/0.25/0.50, average best IoU, mask Dice/IoU, false and accepted proposals per image, acceptance rate, area over/under-coverage, correction count, and estimated review time. CSV export is available in Dataset Export.
+
+## Annotation-Efficiency Experiment Protocol
+
+The **Research Evaluation** tab measures whether ranked proposals reduce reviewer effort. Review timing starts when image analysis completes and stops when review metadata is saved. Each record includes experiment ID, reviewer ID, image, method, final proposal count, accept/reject/uncertain counts, image-level outcome, timestamps, duration, first useful rank, and Top-1/3/5/8 indicators.
+
+An accepted reviewed region is treated as a reference true-anomaly proposal for the experiment. For a method with ranked proposals `p_1 ... p_K`, a reference is found at rank `k` when `IoU(p_k, reference) >= 0.10`. Top-K proposal recall is:
+
+```text
+Top-K recall = anomaly-present images with first useful rank <= K
+               -------------------------------------------------
+                         all anomaly-present images
+```
+
+Images marked `no anomaly` or `uncertain` are excluded from the Top-K recall denominator. They remain in proposal-burden and timing summaries.
+
+Dataset-level annotation-efficiency metrics include mean accepted proposals per image, mean false/rejected proposals per image, annotation acceptance rate, mean review time, and mean proposals reviewed before the first useful region. Results compare contour-only, fixed-threshold, raw multi-scale fused, and refined contextual methods and can be exported as CSV or JSON.
+
+Recommended procedure:
+
+1. Choose a stable experiment ID for one protocol/configuration and a consistent reviewer ID.
+2. Analyze one image without inspecting baseline comparison results first.
+3. Review proposals in rank order and mark each accept, reject, or uncertain.
+4. Save review metadata to close the timer.
+5. Set the image outcome to anomaly present, no anomaly, or uncertain.
+6. Record the Research Evaluation row set.
+7. Repeat across the dataset and reviewers without changing proposal parameters mid-experiment.
+8. Export CSV/JSON and compare Top-K recall together with review time and false-proposal burden.
+
+The baseline rankings use mean anomaly-heatmap evidence and are capped at eight proposals, matching the default refined-method review budget. This is an annotation-efficiency experiment, not a clinical or structural-safety validation.
 
 ## Ablation Design
 
