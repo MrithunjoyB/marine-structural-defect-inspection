@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -10,6 +11,26 @@ class PriorityResult:
     score: float
     label: str
     rationale: str
+
+
+DEFAULT_SCORE_WEIGHTS = {
+    "edge_density": 0.16,
+    "texture_variation": 0.20,
+    "colour_difference": 0.14,
+    "gradient_strength": 0.14,
+    "entropy": 0.10,
+    "area_relevance": 0.10,
+    "mask_stability": 0.16,
+}
+
+
+def weighted_anomaly_score(components: Mapping[str, float], weights: Mapping[str, float] | None = None) -> float:
+    selected = dict(DEFAULT_SCORE_WEIGHTS if weights is None else weights)
+    total = sum(max(float(value), 0.0) for value in selected.values()) or 1.0
+    return 100.0 * sum(
+        max(0.0, min(1.0, float(components.get(name, 0.0)))) * max(float(weight), 0.0)
+        for name, weight in selected.items()
+    ) / total
 
 
 def score_region(

@@ -16,7 +16,7 @@ from dataset_export import export_dataset
 from feature_extraction import extract_feature_maps, save_feature_maps
 from labeling import build_annotation
 from preprocess import apply_preprocessing
-from region_proposal import create_region_crop, propose_regions
+from region_proposal import create_region_crops, propose_regions
 from report import generate_pdf_report
 from yolo_inference import run_yolo_inference
 
@@ -82,6 +82,8 @@ def run_analysis(uploaded_file, settings: dict[str, int | bool]) -> None:
         image_stem=image_stem,
         min_area=int(settings["min_area"]),
         max_regions=int(settings["max_regions"]),
+        min_relative_area=float(settings["min_relative_area"]),
+        max_relative_area=float(settings["max_relative_area"]),
     )
     yolo_result = run_yolo_inference(processed, image_stem, confidence_threshold=float(settings["yolo_confidence"]))
 
@@ -125,6 +127,8 @@ def main() -> None:
             "color_sensitivity": st.slider("Color sensitivity", 5, 120, 35, 5),
             "threshold_level": st.slider("Threshold level", 20, 235, 128, 5),
             "min_area": st.slider("Minimum region area", 50, 5000, 250, 50),
+            "min_relative_area": st.slider("Minimum relative area", 0.0001, 0.0200, 0.0002, 0.0001, format="%.4f"),
+            "max_relative_area": st.slider("Maximum relative area", 0.10, 0.95, 0.85, 0.05),
             "max_regions": st.slider("Maximum regions", 3, 60, 20, 1),
             "yolo_confidence": st.slider("YOLO confidence", 0.10, 0.90, 0.35, 0.05),
         }
@@ -202,7 +206,19 @@ def main() -> None:
             st.info("Run analysis to create region proposals.")
         else:
             st.image(proposal_result.overlay_path.as_posix(), caption="Highlighted visual anomaly candidates", use_container_width=True)
+            diagnostic_cols = st.columns(5)
+            diagnostics = proposal_result.diagnostics
+            diagnostic_cols[0].metric("Raw components", diagnostics.raw_components)
+            diagnostic_cols[1].metric("After filtering", diagnostics.after_filtering)
+            diagnostic_cols[2].metric("After merging", diagnostics.after_merging)
+            diagnostic_cols[3].metric("Heat threshold", f"{diagnostics.heatmap_threshold:.1f}")
+            median_score = float(pd.Series(diagnostics.score_distribution).median()) if diagnostics.score_distribution else 0.0
+            diagnostic_cols[4].metric("Median score", f"{median_score:.1f}")
             st.dataframe(pd.DataFrame([proposal.to_row() for proposal in proposal_result.proposals]), use_container_width=True)
+            st.caption("Algorithm comparison")
+            comparison_cols = st.columns(3)
+            for col, (name, path) in zip(comparison_cols, proposal_result.comparison_paths.items()):
+                col.image(path.as_posix(), caption=f"{name} | {proposal_result.comparison_counts[name]} regions", use_container_width=True)
             st.download_button(
                 "Download Combined Binary Mask",
                 proposal_result.combined_mask_path.read_bytes(),
@@ -222,13 +238,20 @@ def main() -> None:
             annotations = []
             for proposal in proposal_result.proposals:
                 with st.expander(f"{proposal.region_id} | {proposal.priority.label} | score {proposal.priority.score}", expanded=False):
-                    cols = st.columns([1, 2])
-                    crop = create_region_crop(st.session_state.processed, proposal)
-                    cols[0].image(crop, channels="BGR", caption="Region crop", use_container_width=True)
-                    accepted = cols[1].checkbox("Accept region", value=proposal.priority.label in {"High", "Review Required"}, key=f"accept_{proposal.region_id}")
-                    label = cols[1].selectbox("Candidate label", DEFAULT_LABEL_CLASSES, key=f"label_{proposal.region_id}")
-                    custom = cols[1].text_input("Optional custom label", key=f"custom_{proposal.region_id}")
-                    notes = cols[1].text_area("Notes", key=f"notes_{proposal.region_id}", height=70)
+                    crop_cols = st.columns(3)
+                    crops = create_region_crops(st.session_state.processed, st.session_state.feature_maps, proposal)
+                    for col, (name, crop) in zip(crop_cols, crops.items()):
+                        col.image(crop, channels="BGR", caption=name, use_container_width=False)
+                    st.caption(proposal.explanation)
+                    st.json({
+                        "edge_density": round(proposal.edge_density, 3), "texture_variation": round(proposal.texture_score, 3),
+                        "colour_difference": round(proposal.color_variation_score, 3), "gradient_strength": round(proposal.gradient_strength, 3),
+                        "entropy": round(proposal.entropy, 3), "mask_stability": round(proposal.mask_stability, 3),
+                    })
+                    accepted = st.checkbox("Accept region", value=proposal.priority.label in {"High", "Review Required"}, key=f"accept_{proposal.region_id}")
+                    label = st.selectbox("Candidate label", DEFAULT_LABEL_CLASSES, key=f"label_{proposal.region_id}")
+                    custom = st.text_input("Optional custom label", key=f"custom_{proposal.region_id}")
+                    notes = st.text_area("Notes", key=f"notes_{proposal.region_id}", height=70)
                     final_label = custom.strip() if custom.strip() else label
                     annotations.append(build_annotation(st.session_state.image_name, proposal, accepted, final_label, notes))
             if st.button("Save Review Metadata", type="primary"):

@@ -20,7 +20,9 @@ class FeatureMaps:
     threshold_mask: np.ndarray
     contour_map: np.ndarray
     texture_variation: np.ndarray
+    lbp_texture: np.ndarray
     color_variation: np.ndarray
+    anomaly_strength: np.ndarray
     anomaly_heatmap: np.ndarray
 
     def as_dict(self) -> dict[str, np.ndarray]:
@@ -32,6 +34,7 @@ class FeatureMaps:
             "Threshold Mask": self.threshold_mask,
             "Contour Map": self.contour_map,
             "Texture Variation Map": self.texture_variation,
+            "Local Binary Pattern Map": self.lbp_texture,
             "Color Variation Mask": self.color_variation,
             "Combined Anomaly Heatmap": self.anomaly_heatmap,
         }
@@ -64,27 +67,33 @@ def extract_feature_maps(
     contour_map = np.zeros_like(gray)
     cv2.drawContours(contour_map, contours, -1, 255, 1)
 
-    mean = cv2.blur(gray, (15, 15))
-    texture = cv2.absdiff(gray, mean)
+    gray_float = gray.astype(np.float32)
+    mean = cv2.blur(gray_float, (15, 15))
+    mean_sq = cv2.blur(gray_float * gray_float, (15, 15))
+    texture = np.sqrt(np.maximum(mean_sq - mean * mean, 0.0))
     texture = cv2.normalize(texture, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    _, texture_mask = cv2.threshold(texture, texture_sensitivity, 255, cv2.THRESH_BINARY)
+
+    lbp = _local_binary_pattern(gray)
+    lbp_mean = cv2.blur(lbp.astype(np.float32), (15, 15))
+    lbp_deviation = cv2.absdiff(lbp.astype(np.float32), lbp_mean)
+    lbp_texture = cv2.normalize(lbp_deviation, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     local_mean = cv2.blur(lab, (21, 21))
     color_delta = cv2.absdiff(lab, local_mean)
     color_strength = np.sqrt(np.sum(color_delta.astype(np.float32) ** 2, axis=2))
     color_strength = cv2.normalize(color_strength, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    _, color_mask = cv2.threshold(color_strength, color_sensitivity, 255, cv2.THRESH_BINARY)
-
     heat_raw = (
-        0.25 * sobel.astype(np.float32)
-        + 0.25 * laplacian.astype(np.float32)
-        + 0.20 * canny.astype(np.float32)
-        + 0.18 * texture_mask.astype(np.float32)
-        + 0.12 * color_mask.astype(np.float32)
+        0.18 * sobel.astype(np.float32)
+        + 0.12 * laplacian.astype(np.float32)
+        + 0.16 * canny.astype(np.float32)
+        + 0.20 * texture.astype(np.float32)
+        + 0.12 * lbp_texture.astype(np.float32)
+        + 0.16 * color_strength.astype(np.float32)
+        + 0.06 * threshold_mask.astype(np.float32)
     )
-    heatmap = cv2.normalize(heat_raw, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_TURBO)
+    anomaly_strength = cv2.normalize(heat_raw, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    heatmap = cv2.applyColorMap(anomaly_strength, cv2.COLORMAP_TURBO)
 
     return FeatureMaps(
         grayscale=gray,
@@ -93,10 +102,26 @@ def extract_feature_maps(
         laplacian=laplacian,
         threshold_mask=threshold_mask,
         contour_map=contour_map,
-        texture_variation=texture_mask,
-        color_variation=color_mask,
+        texture_variation=texture,
+        lbp_texture=lbp_texture,
+        color_variation=color_strength,
+        anomaly_strength=anomaly_strength,
         anomaly_heatmap=heatmap,
     )
+
+
+def _local_binary_pattern(gray: np.ndarray) -> np.ndarray:
+    """Return an eight-neighbour LBP descriptor without extra dependencies."""
+    padded = cv2.copyMakeBorder(gray, 1, 1, 1, 1, cv2.BORDER_REFLECT)
+    center = padded[1:-1, 1:-1]
+    result = np.zeros_like(gray)
+    neighbours = [
+        padded[:-2, :-2], padded[:-2, 1:-1], padded[:-2, 2:], padded[1:-1, 2:],
+        padded[2:, 2:], padded[2:, 1:-1], padded[2:, :-2], padded[1:-1, :-2],
+    ]
+    for bit, neighbour in enumerate(neighbours):
+        result |= ((neighbour >= center).astype(np.uint8) << bit)
+    return result
 
 
 def save_feature_maps(feature_maps: FeatureMaps, image_stem: str) -> dict[str, Path]:

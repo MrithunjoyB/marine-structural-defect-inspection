@@ -40,9 +40,11 @@ reviewed dataset
 - Streamlit tab-based UI with Overview, Image Analysis, Feature Maps, Region Proposals, Human Review, Dataset Export, Report Generation, and Future Model Training.
 - Single-image and batch-image upload UI. The first selected image is analyzed; video upload is recognized as a future-ready input path.
 - Preprocessing: resizing, denoising, CLAHE contrast enhancement, sharpening, grayscale conversion, and brightness/contrast adjustment.
-- Feature maps: grayscale, Canny edge map, Sobel gradient map, Laplacian map, threshold mask, contour map, texture variation map, color variation mask, and combined anomaly heatmap.
-- Classical CV region proposals from edge concentration, texture discontinuity, color variation, threshold masks, and contour grouping.
-- Per-region measurements: region ID, bounding box, pixel area, relative image area, aspect ratio, perimeter, edge density, texture score, color variation score, and visual anomaly priority score.
+- Feature maps: grayscale, Canny, Sobel, Laplacian, local variance, local binary pattern (LBP), Lab color deviation, foreground threshold, contours, and a continuous fused anomaly heatmap.
+- Overlapping patch scoring at three spatial scales using edge density, gradient, Laplacian response, texture variance, Lab deviation, entropy, and local contrast difference.
+- Adaptive percentile thresholds, morphological processing, connected components, similarity-aware region merging, overlap suppression, and configurable relative-area filtering.
+- Per-region stability under brightness, contrast, Gaussian-noise, and resize perturbations.
+- Per-region measurements and explanations, padded review crops, mask/heatmap crops, automatic diagnostics, and baseline comparison overlays.
 - Segmentation-ready binary masks saved to `outputs/masks/`.
 - Human-in-the-loop review with accept/reject, candidate label assignment, custom label entry, and reviewer notes.
 - Dataset export to YOLO bounding-box text, YOLO-style segmentation polygon text, JSON annotations, CSV summary, copied images, and masks.
@@ -116,6 +118,32 @@ These are candidate labels for dataset creation, not trained predictions.
 ```
 
 Legacy modules from the earlier prototype may remain for backward compatibility, but the main architecture is the StructVision-AI module set above.
+
+## Region-Proposal Methodology
+
+The proposal engine keeps feature evidence separate long enough to avoid dependence on one contour mask. It creates independent percentile masks for Canny edges, Sobel magnitude, Laplacian response, local intensity variance, LBP deviation, Lab color difference, foreground segmentation, and the fused heatmap. Overlapping tiles are evaluated at approximately 8%, 16%, and 28% of the shorter image dimension. Their normalized measurements are projected back to a dense patch-score map.
+
+The dense feature and tile evidence is thresholded by image-specific percentiles. Three morphological scales preserve small spots, elongated lines, and broad irregular regions. Connected components are filtered by relative area and border/specular evidence, then merged using bounding-box IoU, center distance, morphological connectivity, and texture/color similarity. This is intended to produce one reviewable region for a visually continuous weld instead of many tiny boxes.
+
+The configurable score is:
+
+```text
+S = 100 * (w_e E + w_t T + w_c C + w_g G + w_h H + w_a A + w_s S_m) / sum(w)
+```
+
+Here `E` is normalized edge density, `T` texture variation, `C` Lab color difference, `G` gradient strength, `H` entropy, `A` area relevance, and `S_m` perturbation mask stability. Default weights are defined in `scoring.DEFAULT_SCORE_WEIGHTS` and can be overridden through `propose_regions(..., score_weights=...)`.
+
+## Baseline Comparison
+
+The Region Proposals tab reports contour-only, fixed-threshold heatmap, and multi-scale fused outputs side by side. It also displays raw connected-component count, count after filtering, count after merging, the adaptive heatmap threshold, and score-distribution statistics. These baselines are diagnostic references, not alternate export paths.
+
+## Proposal Evaluation
+
+`evaluation.py` treats manually reviewed boxes as references and computes proposal recall at a configurable IoU threshold, average best IoU, false proposals per image, reference-region coverage, and annotation acceptance rate. Synthetic regression tests cover a long irregular weld, thin crack-like line, pitting-like spots, a broad color change, a clean surface, and a lighting gradient:
+
+```bash
+python -m unittest discover -s tests -p 'test_*.py' -v
+```
 
 ## Setup
 
@@ -220,6 +248,9 @@ docs/screenshots/dataset_export.png
 
 - Classical CV proposals identify visually significant candidate regions, not certified defects.
 - Region quality depends on lighting, viewpoint, texture, surface cleanliness, and filter settings.
+- Percentile thresholds are image-relative, so a uniformly damaged image or a frame with no normal background can still be ambiguous.
+- Perturbation stability measures repeatability of classical saliency, not physical defect persistence.
+- Synthetic tests exercise geometry and nuisance conditions but do not replace evaluation on reviewed field imagery.
 - YOLO inference requires a trained `models/best.pt`.
 - Segmentation polygon export currently uses bounding-box polygons unless refined masks are added later.
 - Video frame extraction is a planned extension, not an automatic processing path in the current app.
