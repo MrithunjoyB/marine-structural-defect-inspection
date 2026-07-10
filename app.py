@@ -1,4 +1,4 @@
-"""Streamlit application for marine structural defect inspection."""
+"""Streamlit interface for StructVision-AI."""
 
 from __future__ import annotations
 
@@ -11,166 +11,275 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from config import OUTPUT_DIR, REPORT_DIR, UPLOAD_DIR
-from detect import run_detection
-from explain import build_engineering_summary, recommend_actions
-from preprocess import apply_preprocessing, build_preview_grid
+from config import DEFAULT_LABEL_CLASSES, OUTPUT_DIR, PROJECT_SUBTITLE, PROJECT_TITLE, REPORT_DIR, UPLOAD_DIR
+from dataset_export import export_dataset
+from feature_extraction import extract_feature_maps, save_feature_maps
+from labeling import build_annotation
+from preprocess import apply_preprocessing
+from region_proposal import create_region_crop, propose_regions
 from report import generate_pdf_report
-from severity import estimate_overall_severity
+from yolo_inference import run_yolo_inference
 
 
-st.set_page_config(
-    page_title="Marine Structural Defect Inspection",
-    page_icon="⚓",
-    layout="wide",
-)
+st.set_page_config(page_title="StructVision-AI", layout="wide")
 
 
-def _save_upload(uploaded_file) -> Path:
+def save_upload(uploaded_file) -> Path:
     suffix = Path(uploaded_file.name).suffix.lower() or ".png"
-    safe_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}{suffix}"
-    upload_path = UPLOAD_DIR / safe_name
-    upload_path.write_bytes(uploaded_file.getbuffer())
-    return upload_path
+    safe_stem = Path(uploaded_file.name).stem.replace(" ", "_")[:48] or "image"
+    path = UPLOAD_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_stem}_{uuid4().hex[:6]}{suffix}"
+    path.write_bytes(uploaded_file.getbuffer())
+    return path
 
 
-def _read_image(path: Path):
+def load_cv_image(path: Path):
     image = cv2.imread(str(path))
     if image is None:
-        raise ValueError("Uploaded file could not be read as an image.")
+        raise ValueError(f"Could not read image: {path.name}")
     return image
 
 
-def main() -> None:
-    st.title("AI-Based Visual Inspection and Defect Severity Analysis for Marine Structural Components")
-    st.caption(
-        "Computer vision workflow for hull plates, offshore members, pipelines, welded joints, "
-        "coated surfaces, and metallic panels."
+def init_state() -> None:
+    defaults = {
+        "image_path": None,
+        "image_name": None,
+        "processed": None,
+        "feature_maps": None,
+        "feature_paths": {},
+        "proposal_result": None,
+        "annotations": [],
+        "yolo_result": None,
+        "preprocess_settings": {},
+    }
+    for key, value in defaults.items():
+        st.session_state.setdefault(key, value)
+
+
+def run_analysis(uploaded_file, settings: dict[str, int | bool]) -> None:
+    image_path = save_upload(uploaded_file)
+    raw = load_cv_image(image_path)
+    processed = apply_preprocessing(
+        raw,
+        resize_width=int(settings["resize_width"]),
+        denoise=bool(settings["denoise"]),
+        clahe=bool(settings["clahe"]),
+        sharpen=bool(settings["sharpen"]),
+        brightness=int(settings["brightness"]),
+        contrast=int(settings["contrast"]),
     )
+    image_stem = image_path.stem
+    feature_maps = extract_feature_maps(
+        processed,
+        edge_sensitivity=int(settings["edge_sensitivity"]),
+        texture_sensitivity=int(settings["texture_sensitivity"]),
+        color_sensitivity=int(settings["color_sensitivity"]),
+        threshold_level=int(settings["threshold_level"]),
+    )
+    feature_paths = save_feature_maps(feature_maps, image_stem)
+    proposal_result = propose_regions(
+        processed,
+        feature_maps,
+        image_stem=image_stem,
+        min_area=int(settings["min_area"]),
+        max_regions=int(settings["max_regions"]),
+    )
+    yolo_result = run_yolo_inference(processed, image_stem, confidence_threshold=float(settings["yolo_confidence"]))
+
+    st.session_state.image_path = image_path
+    st.session_state.image_name = uploaded_file.name
+    st.session_state.processed = processed
+    st.session_state.feature_maps = feature_maps
+    st.session_state.feature_paths = feature_paths
+    st.session_state.proposal_result = proposal_result
+    st.session_state.yolo_result = yolo_result
+    st.session_state.annotations = []
+    st.session_state.preprocess_settings = settings
+
+
+def main() -> None:
+    init_state()
+    st.title(PROJECT_TITLE)
+    st.caption(PROJECT_SUBTITLE)
 
     with st.sidebar:
-        st.header("Inspection Controls")
-        uploaded_file = st.file_uploader("Upload inspection image", type=["jpg", "jpeg", "png", "bmp", "tif", "tiff"])
-        st.subheader("Preprocessing")
-        resize_width = st.slider("Resize width", min_value=640, max_value=1600, value=1024, step=64)
-        use_denoise = st.checkbox("Denoise", value=True)
-        use_clahe = st.checkbox("CLAHE contrast enhancement", value=True)
-        use_sharpen = st.checkbox("Sharpen", value=False)
-        show_previews = st.checkbox("Show preprocessing previews", value=True)
-        st.subheader("Detection")
-        confidence = st.slider("YOLO confidence threshold", min_value=0.10, max_value=0.90, value=0.35, step=0.05)
-        force_classical = st.checkbox("Force classical CV demo mode", value=False)
+        st.header("Input")
+        uploaded_files = st.file_uploader(
+            "Upload image(s)",
+            type=["jpg", "jpeg", "png", "bmp", "tif", "tiff"],
+            accept_multiple_files=True,
+        )
+        video_file = st.file_uploader("Optional video upload", type=["mp4", "mov", "avi"], accept_multiple_files=False)
+        if video_file is not None:
+            st.info("Video upload is recognized. Frame extraction is future-ready and not executed automatically in this prototype.")
 
-    st.markdown(
-        "Manual inspection in marine environments is time-consuming and subjective. This prototype "
-        "combines visual defect localization, severity scoring, and engineering-style reporting to "
-        "support early inspection triage."
+        st.header("Preprocessing")
+        settings = {
+            "resize_width": st.slider("Resize width", 512, 1800, 1024, 64),
+            "brightness": st.slider("Brightness", -80, 80, 0, 5),
+            "contrast": st.slider("Contrast", -80, 120, 0, 5),
+            "denoise": st.checkbox("Denoise", value=True),
+            "clahe": st.checkbox("CLAHE enhancement", value=True),
+            "sharpen": st.checkbox("Sharpen", value=False),
+            "edge_sensitivity": st.slider("Edge sensitivity", 30, 220, 100, 5),
+            "texture_sensitivity": st.slider("Texture sensitivity", 5, 120, 35, 5),
+            "color_sensitivity": st.slider("Color sensitivity", 5, 120, 35, 5),
+            "threshold_level": st.slider("Threshold level", 20, 235, 128, 5),
+            "min_area": st.slider("Minimum region area", 50, 5000, 250, 50),
+            "max_regions": st.slider("Maximum regions", 3, 60, 20, 1),
+            "yolo_confidence": st.slider("YOLO confidence", 0.10, 0.90, 0.35, 0.05),
+        }
+
+        analyze = st.button("Analyze Selected Image", type="primary", use_container_width=True)
+
+    if analyze:
+        if not uploaded_files:
+            st.error("Upload at least one image before analysis.")
+        else:
+            with st.spinner("Extracting features and proposing candidate regions..."):
+                run_analysis(uploaded_files[0], settings)
+
+    tabs = st.tabs(
+        [
+            "Overview",
+            "Image Analysis",
+            "Feature Maps",
+            "Region Proposals",
+            "Human Review / Labeling",
+            "Dataset Export",
+            "Report Generation",
+            "Future Model Training",
+        ]
     )
 
-    if uploaded_file is None:
-        st.info("Upload an inspection image to begin analysis.")
+    with tabs[0]:
+        st.subheader("Purpose")
+        st.write(
+            "StructVision-AI analyzes structural, product, component, or surface images before labeled data exists. "
+            "It proposes visually significant anomaly candidates, creates segmentation-ready masks, supports human review, "
+            "and exports annotations for future YOLO training."
+        )
         st.markdown(
-            "Relevant targets include corroded hull plates, coating breakdown, crack-like discontinuities, "
-            "weld defects, dents, deformation, pitting, scratches, and general surface anomalies."
+            "Raw image → preprocessing → feature extraction → anomaly region proposal → mask output → visual priority scoring "
+            "→ human review → dataset export → future YOLO/SAM training → inspection report."
         )
-        return
+        st.info("Before a trained model is present, all regions are candidate proposals, not certified defect predictions.")
 
-    try:
-        upload_path = _save_upload(uploaded_file)
-        raw_image = _read_image(upload_path)
-    except Exception as exc:
-        st.error(f"Could not process upload: {exc}")
-        return
+    with tabs[1]:
+        st.subheader("Image Analysis")
+        if st.session_state.image_path is None:
+            st.info("Upload and analyze an image from the sidebar.")
+        else:
+            cols = st.columns(2)
+            cols[0].caption("Uploaded image")
+            cols[0].image(Image.open(st.session_state.image_path), use_container_width=True)
+            cols[1].caption("Preprocessed analysis image")
+            cols[1].image(st.session_state.processed, channels="BGR", use_container_width=True)
+            yolo = st.session_state.yolo_result
+            st.write(yolo.message)
+            if yolo.available and yolo.annotated_path:
+                st.image(yolo.annotated_path.as_posix(), caption="Trained YOLO predictions", use_container_width=True)
+                st.dataframe(pd.DataFrame([pred.to_row() for pred in yolo.predictions]), use_container_width=True)
 
-    processed = apply_preprocessing(
-        raw_image,
-        resize_width=resize_width,
-        denoise=use_denoise,
-        clahe=use_clahe,
-        sharpen=use_sharpen,
-    )
+    with tabs[2]:
+        st.subheader("Feature Maps")
+        if st.session_state.feature_maps is None:
+            st.info("Run analysis to generate feature maps.")
+        else:
+            fmap_items = list(st.session_state.feature_maps.as_dict().items())
+            for row_start in range(0, len(fmap_items), 3):
+                cols = st.columns(3)
+                for col, (name, fmap) in zip(cols, fmap_items[row_start : row_start + 3]):
+                    col.caption(name)
+                    if fmap.ndim == 2:
+                        col.image(fmap, clamp=True, use_container_width=True)
+                    else:
+                        col.image(fmap, channels="BGR", use_container_width=True)
 
-    detection = run_detection(
-        image=processed,
-        original_name=uploaded_file.name,
-        output_dir=OUTPUT_DIR,
-        confidence_threshold=confidence,
-        force_classical=force_classical,
-    )
+    with tabs[3]:
+        st.subheader("Region Proposals")
+        proposal_result = st.session_state.proposal_result
+        if proposal_result is None:
+            st.info("Run analysis to create region proposals.")
+        else:
+            st.image(proposal_result.overlay_path.as_posix(), caption="Highlighted visual anomaly candidates", use_container_width=True)
+            st.dataframe(pd.DataFrame([proposal.to_row() for proposal in proposal_result.proposals]), use_container_width=True)
+            st.download_button(
+                "Download Combined Binary Mask",
+                proposal_result.combined_mask_path.read_bytes(),
+                file_name=proposal_result.combined_mask_path.name,
+                mime="image/png",
+            )
 
-    severity = estimate_overall_severity(detection.defects, processed.shape[:2])
-    interpretation = build_engineering_summary(detection.defects, severity)
-    actions = recommend_actions(detection.defects, severity)
+    with tabs[4]:
+        st.subheader("Human Review / Labeling")
+        proposal_result = st.session_state.proposal_result
+        if proposal_result is None:
+            st.info("Run analysis before reviewing candidate regions.")
+        elif not proposal_result.proposals:
+            st.warning("No candidate regions were proposed with the current filters.")
+        else:
+            st.write("Assign candidate labels for dataset creation. These labels are human review metadata, not model predictions.")
+            annotations = []
+            for proposal in proposal_result.proposals:
+                with st.expander(f"{proposal.region_id} | {proposal.priority.label} | score {proposal.priority.score}", expanded=False):
+                    cols = st.columns([1, 2])
+                    crop = create_region_crop(st.session_state.processed, proposal)
+                    cols[0].image(crop, channels="BGR", caption="Region crop", use_container_width=True)
+                    accepted = cols[1].checkbox("Accept region", value=proposal.priority.label in {"High", "Review Required"}, key=f"accept_{proposal.region_id}")
+                    label = cols[1].selectbox("Candidate label", DEFAULT_LABEL_CLASSES, key=f"label_{proposal.region_id}")
+                    custom = cols[1].text_input("Optional custom label", key=f"custom_{proposal.region_id}")
+                    notes = cols[1].text_area("Notes", key=f"notes_{proposal.region_id}", height=70)
+                    final_label = custom.strip() if custom.strip() else label
+                    annotations.append(build_annotation(st.session_state.image_name, proposal, accepted, final_label, notes))
+            if st.button("Save Review Metadata", type="primary"):
+                st.session_state.annotations = annotations
+                st.success(f"Saved {len(annotations)} reviewed region records in session state.")
 
-    top_cols = st.columns([1.05, 1])
-    with top_cols[0]:
-        st.subheader("Uploaded Image")
-        st.image(Image.open(upload_path), use_container_width=True)
-    with top_cols[1]:
-        st.subheader("Annotated Output")
-        st.image(detection.annotated_image_path.as_posix(), use_container_width=True)
+    with tabs[5]:
+        st.subheader("Dataset Export")
+        if st.session_state.image_path is None:
+            st.info("Analyze and review an image before exporting.")
+        elif not st.session_state.annotations:
+            st.warning("Save review metadata first. Export uses accepted regions and their candidate labels.")
+        else:
+            accepted = [ann for ann in st.session_state.annotations if ann.accepted and ann.label != "ignore"]
+            st.metric("Accepted candidate regions", len(accepted))
+            if st.button("Export Reviewed Dataset Files", type="primary"):
+                paths = export_dataset(
+                    st.session_state.image_path,
+                    st.session_state.processed.shape[:2],
+                    st.session_state.annotations,
+                )
+                st.success("Dataset export completed.")
+                st.json({name: path.as_posix() for name, path in paths.items()})
 
-    metric_cols = st.columns(4)
-    metric_cols[0].metric("Detection Mode", detection.mode)
-    metric_cols[1].metric("Defect Count", len(detection.defects))
-    metric_cols[2].metric("Severity Score", f"{severity.score:.1f}/100")
-    metric_cols[3].metric("Severity Level", severity.label)
+    with tabs[6]:
+        st.subheader("Report Generation")
+        if st.session_state.proposal_result is None:
+            st.info("Run analysis before generating a report.")
+        else:
+            if st.button("Generate PDF Report", type="primary"):
+                report_path = generate_pdf_report(
+                    report_dir=REPORT_DIR,
+                    image_name=st.session_state.image_name,
+                    preprocessing_settings=st.session_state.preprocess_settings,
+                    feature_paths=st.session_state.feature_paths,
+                    proposal_result=st.session_state.proposal_result,
+                    annotations=st.session_state.annotations,
+                    yolo_result=st.session_state.yolo_result,
+                )
+                st.success(f"Report generated: {report_path.name}")
+                st.download_button("Download Report", report_path.read_bytes(), file_name=report_path.name, mime="application/pdf")
 
-    if detection.message:
-        st.warning(detection.message)
-
-    st.subheader("Defect Summary")
-    if detection.defects:
-        table = pd.DataFrame([defect.to_table_row() for defect in detection.defects])
-        st.dataframe(table, use_container_width=True, hide_index=True)
-    else:
-        st.success("No visible defect region was identified by the selected detection mode.")
-
-    st.subheader("Engineering Interpretation")
-    st.write(interpretation)
-
-    st.subheader("Recommended Inspection Action")
-    for action in actions:
-        st.write(f"- {action}")
-
-    if show_previews:
-        st.subheader("Preprocessing Preview")
-        previews = build_preview_grid(processed)
-        preview_cols = st.columns(len(previews))
-        for col, (title, preview) in zip(preview_cols, previews.items()):
-            with col:
-                st.caption(title)
-                st.image(preview, channels="BGR" if preview.ndim == 3 else "GRAY", use_container_width=True)
-
-    report_path = generate_pdf_report(
-        report_dir=REPORT_DIR,
-        image_name=uploaded_file.name,
-        detection=detection,
-        severity=severity,
-        interpretation=interpretation,
-        actions=actions,
-    )
-
-    download_cols = st.columns(2)
-    with download_cols[0]:
-        st.download_button(
-            "Download Annotated Image",
-            data=detection.annotated_image_path.read_bytes(),
-            file_name=detection.annotated_image_path.name,
-            mime="image/png",
+    with tabs[7]:
+        st.subheader("Future Model Training")
+        st.write(
+            "After reviewing and exporting enough labeled candidate regions, train YOLO detection or segmentation with Ultralytics. "
+            "The app will automatically show trained inference separately when `models/best.pt` exists."
         )
-    with download_cols[1]:
-        st.download_button(
-            "Download PDF Inspection Report",
-            data=report_path.read_bytes(),
-            file_name=report_path.name,
-            mime="application/pdf",
-        )
-
-    st.caption(
-        "Disclaimer: This is an AI-assisted visual inspection prototype and should not replace "
-        "certified marine or structural inspection."
-    )
+        st.code("python train.py --data datasets/data.yaml --task detect --model yolo11n.pt --epochs 80 --imgsz 640", language="bash")
+        st.code("python train.py --data datasets/data.yaml --task segment --model yolo11n-seg.pt --epochs 80 --imgsz 640", language="bash")
+        st.info("SAM/SAM2 integration is future-ready: use proposed boxes as prompts, then replace rectangular masks with refined masks.")
 
 
 if __name__ == "__main__":

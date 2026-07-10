@@ -1,40 +1,93 @@
-# AI-Based Visual Inspection and Defect Severity Analysis for Marine Structural Components
+# StructVision-AI
 
-Professional computer vision prototype for detecting and analyzing visual defects in marine and industrial structural components such as ship hull plates, offshore structures, pipelines, welded joints, metallic panels, and coated surfaces.
+**Foundation-Model-Assisted Visual Inspection and Dataset Generation for Structural Surface Anomalies**
 
-## Problem Statement
+StructVision-AI is a computer vision prototype for analyzing structural, component, product, and surface images before labeled training data is available. Instead of pretending to be a trained defect classifier, it uses classical feature extraction and visual anomaly region proposal to help a human reviewer build a labeled dataset for future YOLO or segmentation-model training.
 
-Manual inspection of marine structures is time-consuming, subjective, and difficult in corrosive or offshore environments. This project demonstrates an AI-assisted workflow that takes an inspection image, highlights suspicious defect regions, estimates severity, and generates a technical inspection report.
+The system remains suitable for Ocean Engineering, Naval Architecture, industrial inspection, and surface quality workflows, while staying general enough for many component or material images.
 
-## Why This Matters in Ocean Engineering and Naval Architecture
+## Why This Is Not Just a YOLO Detector
 
-Marine structures operate under corrosion, cyclic wave loading, impact, coating degradation, fatigue, and harsh inspection conditions. Early recognition of corrosion, crack-like indications, weld defects, coating damage, dents, deformation, pitting, and scratches supports maintenance planning for hulls, offshore platforms, pipelines, and welded structural details.
+Most beginner projects start and end with a detector. StructVision-AI is built around the earlier and more important stage: creating useful training data and inspection evidence when no domain-specific model exists yet.
 
-## Features
+Current stage:
 
-- Streamlit inspection dashboard with image upload, preprocessing controls, detection output, and severity metrics.
-- YOLO inference through `models/best.pt` when trained weights are available.
-- Classical OpenCV demo mode when trained YOLO weights are missing.
-- Modular preprocessing: resize, denoise, sharpen, grayscale preview, edge preview, and CLAHE contrast enhancement.
-- Severity scoring from defect type, confidence, affected area, defect count, and marine structural risk weight.
-- Engineering interpretation and recommended inspection actions.
-- Downloadable annotated image and PDF inspection report.
+```text
+raw image
+→ preprocessing
+→ feature extraction
+→ visual anomaly candidate proposal
+→ segmentation-ready mask output
+→ region quantification
+→ visual priority scoring
+→ human review and candidate labeling
+→ dataset export
+→ report generation
+```
 
-## Tech Stack
+Future stage:
 
-Python, OpenCV, Ultralytics YOLO, Streamlit, NumPy, Pandas, Pillow, ReportLab, and optional Matplotlib.
+```text
+reviewed dataset
+→ YOLO detection or segmentation training
+→ optional SAM/SAM2 mask refinement
+→ trained inference comparison
+→ improved inspection reporting
+```
+
+## Current Capabilities
+
+- Streamlit tab-based UI with Overview, Image Analysis, Feature Maps, Region Proposals, Human Review, Dataset Export, Report Generation, and Future Model Training.
+- Single-image and batch-image upload UI. The first selected image is analyzed; video upload is recognized as a future-ready input path.
+- Preprocessing: resizing, denoising, CLAHE contrast enhancement, sharpening, grayscale conversion, and brightness/contrast adjustment.
+- Feature maps: grayscale, Canny edge map, Sobel gradient map, Laplacian map, threshold mask, contour map, texture variation map, color variation mask, and combined anomaly heatmap.
+- Classical CV region proposals from edge concentration, texture discontinuity, color variation, threshold masks, and contour grouping.
+- Per-region measurements: region ID, bounding box, pixel area, relative image area, aspect ratio, perimeter, edge density, texture score, color variation score, and visual anomaly priority score.
+- Segmentation-ready binary masks saved to `outputs/masks/`.
+- Human-in-the-loop review with accept/reject, candidate label assignment, custom label entry, and reviewer notes.
+- Dataset export to YOLO bounding-box text, YOLO-style segmentation polygon text, JSON annotations, CSV summary, copied images, and masks.
+- Optional trained YOLO inference if `models/best.pt` exists, shown separately from classical proposals.
+- Professional PDF report with preprocessing settings, feature thumbnails, region proposal overlay, region table, review labels, limitations, and future training note.
+
+## Neutral Candidate Labels
+
+Before a trained model is available, the app uses neutral terms such as:
+
+- visual anomaly candidate
+- extracted region
+- texture discontinuity
+- edge concentration
+- color variation region
+- surface irregularity candidate
+
+Default human-review labels:
+
+- `corrosion_candidate`
+- `crack_candidate`
+- `coating_damage_candidate`
+- `weld_irregularity_candidate`
+- `pitting_candidate`
+- `dent_candidate`
+- `scratch_candidate`
+- `other_surface_anomaly`
+- `ignore`
+
+These are candidate labels for dataset creation, not trained predictions.
 
 ## Folder Structure
 
 ```text
-marine-structural-defect-inspection/
+.
 ├── app.py
 ├── config.py
-├── detect.py
-├── explain.py
 ├── preprocess.py
+├── feature_extraction.py
+├── region_proposal.py
+├── scoring.py
+├── labeling.py
+├── dataset_export.py
+├── yolo_inference.py
 ├── report.py
-├── severity.py
 ├── train.py
 ├── data.yaml
 ├── requirements.txt
@@ -46,16 +99,29 @@ marine-structural-defect-inspection/
 ├── uploads/
 │   └── .gitkeep
 ├── outputs/
+│   ├── .gitkeep
+│   ├── feature_maps/
+│   │   └── .gitkeep
+│   └── masks/
+│       └── .gitkeep
+├── reports/
 │   └── .gitkeep
-└── reports/
-    └── .gitkeep
+└── datasets/
+    ├── images/
+    │   └── .gitkeep
+    ├── labels/
+    │   └── .gitkeep
+    └── masks/
+        └── .gitkeep
 ```
+
+Legacy modules from the earlier prototype may remain for backward compatibility, but the main architecture is the StructVision-AI module set above.
 
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -65,73 +131,109 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Upload a marine or industrial structure image. If `models/best.pt` is unavailable, the app automatically switches to Classical Computer Vision Demo Mode.
+The app works even when:
 
-## Detection Classes
+- no trained YOLO model exists
+- SAM/SAM2 is not installed
+- no labeled dataset exists
 
-`corrosion`, `crack`, `coating_damage`, `weld_defect`, `dent`, `scratch`, `deformation`, `pitting`, `surface_anomaly`, `no_defect`
+The default working mode is classical CV feature extraction, anomaly region proposal, human review, and dataset export.
 
-## Training Instructions
+## Annotation And Export Workflow
 
-Prepare a YOLO-format dataset:
+1. Upload one or more images in the sidebar.
+2. Tune preprocessing and proposal filters.
+3. Click **Analyze Selected Image**.
+4. Inspect feature maps and region proposals.
+5. Open **Human Review / Labeling**.
+6. Accept or reject candidate regions.
+7. Assign candidate labels or custom labels.
+8. Save review metadata.
+9. Export dataset files from **Dataset Export**.
+
+Exported dataset structure:
 
 ```text
-data/
+datasets/
 ├── images/
-│   ├── train/
-│   └── val/
-└── labels/
-    ├── train/
-    └── val/
+├── labels/
+├── masks/
+├── annotations.json
+├── dataset_summary.csv
+└── data.yaml
 ```
 
-Then run:
+## YOLO Training Workflow
+
+After enough reviewed annotations are exported:
 
 ```bash
-python train.py --data data.yaml --model yolov8n.pt --epochs 80 --imgsz 640 --batch 8
+python train.py --data datasets/data.yaml --task detect --model yolo11n.pt --epochs 80 --imgsz 640
 ```
 
-Copy the best trained weight to:
+For segmentation-style training:
+
+```bash
+python train.py --data datasets/data.yaml --task segment --model yolo11n-seg.pt --epochs 80 --imgsz 640
+```
+
+The script copies the best trained checkpoint to:
 
 ```text
 models/best.pt
 ```
 
-## Example Output Explanation
+When that file exists, the Streamlit app enables trained YOLO inference and displays those predictions separately from classical region proposals.
 
-For corrosion, the report explains that corrosion-like surface degradation may reduce effective plate thickness, weaken structural members, and accelerate fatigue damage under cyclic loading. For crack-like regions, it recommends closer inspection using dye penetrant testing, magnetic particle testing, or structural repair assessment depending on severity.
+## SAM/SAM2 Future Integration
 
-## CV-Relevant Project Highlights
+SAM or SAM2 can be added later by using proposed bounding boxes as prompts and replacing rectangular or contour masks with refined segmentation masks. The current app does not require SAM and will not fail if SAM is absent.
 
-- Developed an AI-assisted visual inspection prototype for marine structural defect detection.
-- Integrated YOLO-based object detection with OpenCV preprocessing and fallback anomaly localization.
-- Built severity scoring logic using defect type, confidence, relative affected area, and marine structural risk weights.
-- Generated automated engineering inspection reports with annotated imagery and recommended actions.
-- Applied computer vision to corrosion, cracks, coating damage, weld defects, deformation, pitting, dents, and scratches in marine or industrial components.
+## Report Generation
 
-## How to Present to a Faculty Advisor
+The PDF report includes:
 
-Open the Streamlit app, upload a representative image, show the annotated detection output, explain the severity score, and download the PDF report. Emphasize that the prototype separates the AI detection module, engineering severity logic, and report generation pipeline, so it can be extended with a real labeled dataset.
+- project title
+- image filename
+- analysis timestamp
+- preprocessing settings
+- feature map thumbnails
+- highlighted region proposal image
+- region summary table
+- visual anomaly priority scores
+- accepted/rejected review labels when available
+- limitations
+- future model training note
 
-## CDC CV Description
+## Demo Screenshot Placeholders
 
-AI-Based Visual Inspection and Defect Severity Analysis for Marine Structural Components: built a Streamlit and OpenCV prototype integrating YOLO-based defect detection, fallback classical CV anomaly localization, severity scoring, engineering interpretation, and automated PDF inspection reports for marine structural inspection workflows.
+Add screenshots here after running the app:
 
-## Dataset Suggestions for Future Training
+```text
+docs/screenshots/overview.png
+docs/screenshots/feature_maps.png
+docs/screenshots/region_proposals.png
+docs/screenshots/dataset_export.png
+```
 
-- Collect ship hull, welded joint, coated surface, corroded plate, pipeline, and offshore structure images.
-- Label bounding boxes in YOLO format using tools such as CVAT, Roboflow, or LabelImg.
-- Include both defect and no-defect examples across lighting, viewing angle, scale, and surface condition variation.
-- Validate model predictions against inspection notes or expert review where possible.
+## Limitations
 
-## Limitations and Disclaimer
+- Classical CV proposals identify visually significant candidate regions, not certified defects.
+- Region quality depends on lighting, viewpoint, texture, surface cleanliness, and filter settings.
+- YOLO inference requires a trained `models/best.pt`.
+- Segmentation polygon export currently uses bounding-box polygons unless refined masks are added later.
+- Video frame extraction is a planned extension, not an automatic processing path in the current app.
 
-The OpenCV fallback highlights suspicious visual regions but does not provide certified defect classification. YOLO performance depends on dataset quality, annotation consistency, and field validation. This is an AI-assisted visual inspection prototype and should not replace certified marine or structural inspection.
+## Future Roadmap
 
-## Future Improvements
+- Add video frame extraction and frame sampling.
+- Add SAM/SAM2 prompt-based mask refinement.
+- Add active-learning loops for repeated review and retraining.
+- Add multi-image batch processing and dataset merge tools.
+- Add physical scale calibration for area estimates.
+- Add inspection-history database support.
+- Add side-by-side YOLO-vs-proposal matching metrics.
 
-- Train on a domain-specific labeled dataset.
-- Add segmentation masks for affected area estimation.
-- Calibrate pixel area to physical area using scale markers.
-- Include corrosion grade estimation and thickness-loss integration.
-- Add database storage for inspection history and trend analysis.
+## CV-Relevant Project Description
+
+Built StructVision-AI, a visual inspection and dataset-generation system that performs preprocessing, classical feature extraction, anomaly candidate proposal, segmentation-ready mask creation, visual priority scoring, human-in-the-loop labeling, YOLO-format dataset export, optional trained YOLO inference, and automated PDF reporting for structural or surface inspection images.

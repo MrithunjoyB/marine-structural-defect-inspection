@@ -43,14 +43,26 @@ def edge_detection_preview(image: np.ndarray) -> np.ndarray:
     return cv2.Canny(blurred, 70, 170)
 
 
+def adjust_brightness_contrast(image: np.ndarray, brightness: int = 0, contrast: int = 0) -> np.ndarray:
+    """Adjust brightness and contrast using OpenCV's alpha/beta transform."""
+
+    alpha = 1.0 + (contrast / 100.0)
+    beta = brightness
+    return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+
+
 def apply_preprocessing(
     image: np.ndarray,
     resize_width: int = 1024,
     denoise: bool = True,
     clahe: bool = True,
     sharpen: bool = False,
+    brightness: int = 0,
+    contrast: int = 0,
 ) -> np.ndarray:
     processed = resize_image(image, resize_width)
+    if brightness or contrast:
+        processed = adjust_brightness_contrast(processed, brightness, contrast)
     if denoise:
         processed = denoise_image(processed)
     if clahe:

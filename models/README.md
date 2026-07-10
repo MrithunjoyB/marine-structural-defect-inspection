@@ -6,4 +6,6 @@ Place the trained YOLO weight file here as:
 best.pt
 ```
 
-The app works without this file by switching to Classical Computer Vision Demo Mode. Do not commit large model weights unless the repository is configured for Git LFS.
+The app works fully without this file using classical feature extraction, anomaly region proposal, human labeling, and dataset export.
+
+When `best.pt` exists, trained YOLO predictions are shown separately from classical candidate regions. Do not commit large model weights unless the repository is configured for Git LFS.

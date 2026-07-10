@@ -1,6 +1,6 @@
 # Sample Images
 
-Add sample inspection images here for demonstrations.
+Add sample structural, component, product, or surface images here for demonstrations.
 
 Suggested examples:
 
@@ -9,3 +9,4 @@ Suggested examples:
 - welded joint with visible discontinuity
 - dented or deformed metallic panel
 - pitting or scratch-like surface damage
+- clean surface examples for no-anomaly comparison

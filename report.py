@@ -1,4 +1,4 @@
-"""PDF report generation for inspection results."""
+"""Professional PDF reports for StructVision-AI analyses."""
 
 from __future__ import annotations
 
@@ -8,92 +8,115 @@ from uuid import uuid4
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from detect import DetectionResult
-from severity import SeverityResult
+from labeling import ReviewedAnnotation
+from region_proposal import ProposalResult
+from yolo_inference import YoloInferenceResult
 
 
-DISCLAIMER = "This is an AI-assisted visual inspection prototype and should not replace certified marine or structural inspection."
+LIMITATIONS = (
+    "Before a trained model is available, candidate regions are generated from classical computer vision feature maps. "
+    "They indicate visually significant areas for review and dataset creation, not certified defect classifications."
+)
 
 
 def generate_pdf_report(
     report_dir: Path,
     image_name: str,
-    detection: DetectionResult,
-    severity: SeverityResult,
-    interpretation: str,
-    actions: list[str],
+    preprocessing_settings: dict[str, object],
+    feature_paths: dict[str, Path],
+    proposal_result: ProposalResult,
+    annotations: list[ReviewedAnnotation],
+    yolo_result: YoloInferenceResult | None,
 ) -> Path:
     report_dir.mkdir(parents=True, exist_ok=True)
-    report_path = report_dir / f"inspection_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}.pdf"
-
-    doc = SimpleDocTemplate(str(report_path), pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    report_path = report_dir / f"structvision_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}.pdf"
+    doc = SimpleDocTemplate(str(report_path), pagesize=A4, rightMargin=34, leftMargin=34, topMargin=34, bottomMargin=34)
     styles = getSampleStyleSheet()
-    title_style = styles["Title"]
-    heading = styles["Heading2"]
-    body = styles["BodyText"]
-    small = ParagraphStyle("small", parent=body, fontSize=8, leading=10)
-
     story = [
-        Paragraph("AI-Based Visual Inspection and Defect Severity Analysis", title_style),
-        Paragraph("Marine Structural Components Inspection Report", heading),
-        Paragraph(f"<b>Date and time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", body),
-        Paragraph(f"<b>Uploaded image:</b> {image_name}", body),
-        Paragraph(f"<b>Detection mode:</b> {detection.mode}", body),
-        Spacer(1, 0.15 * inch),
+        Paragraph("StructVision-AI", styles["Title"]),
+        Paragraph("Foundation-Model-Assisted Visual Inspection and Dataset Generation Report", styles["Heading2"]),
+        Paragraph(f"<b>Image filename:</b> {image_name}", styles["BodyText"]),
+        Paragraph(f"<b>Analysis date/time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["BodyText"]),
+        Paragraph(f"<b>YOLO status:</b> {yolo_result.message if yolo_result else 'Not evaluated'}", styles["BodyText"]),
+        Spacer(1, 0.12 * inch),
     ]
 
-    if detection.annotated_image_path.exists():
-        story.append(Image(str(detection.annotated_image_path), width=6.0 * inch, height=3.6 * inch, kind="proportional"))
-        story.append(Spacer(1, 0.15 * inch))
+    story.append(Paragraph("Preprocessing Settings", styles["Heading2"]))
+    settings_text = ", ".join(f"{key}: {value}" for key, value in preprocessing_settings.items())
+    story.append(Paragraph(settings_text or "Default preprocessing settings used.", styles["BodyText"]))
+    story.append(Spacer(1, 0.1 * inch))
 
-    summary_rows = [["Defect Type", "Confidence", "BBox", "Area px", "Rel. Area %"]]
-    for defect in detection.defects:
-        row = defect.to_table_row()
-        summary_rows.append(
+    if proposal_result.overlay_path.exists():
+        story.append(Paragraph("Highlighted Region Proposal Image", styles["Heading2"]))
+        story.append(Image(str(proposal_result.overlay_path), width=6.3 * inch, height=3.7 * inch, kind="proportional"))
+        story.append(Spacer(1, 0.1 * inch))
+
+    story.append(Paragraph("Feature Map Thumbnails", styles["Heading2"]))
+    feature_images = [path for path in feature_paths.values() if path.exists()][:4]
+    if feature_images:
+        row = [Image(str(path), width=1.45 * inch, height=1.0 * inch, kind="proportional") for path in feature_images]
+        story.append(Table([row]))
+    else:
+        story.append(Paragraph("Feature map files were not available for this report.", styles["BodyText"]))
+    story.append(Spacer(1, 0.1 * inch))
+
+    story.append(Paragraph("Region Summary", styles["Heading2"]))
+    rows = [["ID", "BBox", "Area", "Edge", "Texture", "Color", "Score", "Priority"]]
+    for proposal in proposal_result.proposals[:24]:
+        row = proposal.to_row()
+        rows.append(
             [
-                row["Defect Type"],
-                row["Confidence"],
-                row["Bounding Box"],
-                row["Area (px)"],
-                row["Relative Area (%)"],
+                row["Region ID"],
+                row["BBox"],
+                row["Pixel Area"],
+                row["Edge Density"],
+                row["Texture Score"],
+                row["Color Variation"],
+                row["Priority Score"],
+                row["Priority Label"],
             ]
         )
-    if len(summary_rows) == 1:
-        summary_rows.append(["No visible defect detected", "-", "-", "-", "-"])
-
-    table = Table(summary_rows, repeatRows=1)
+    if len(rows) == 1:
+        rows.append(["No regions", "-", "-", "-", "-", "-", "-", "-"])
+    table = Table(rows, repeatRows=1)
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e79")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#203864")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]
         )
     )
+    story.append(table)
+
+    if annotations:
+        story.append(Spacer(1, 0.1 * inch))
+        story.append(Paragraph("Human Review Labels", styles["Heading2"]))
+        label_rows = [["Region", "Accepted", "Label", "Priority"]]
+        for ann in annotations[:28]:
+            label_rows.append([ann.region_id, str(ann.accepted), ann.label, ann.priority_label])
+        label_table = Table(label_rows, repeatRows=1)
+        label_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.35, colors.grey), ("FONTSIZE", (0, 0), (-1, -1), 8)]))
+        story.append(label_table)
+
     story.extend(
         [
-            Paragraph("Defect Summary", heading),
-            table,
             Spacer(1, 0.15 * inch),
-            Paragraph("Severity Estimate", heading),
-            Paragraph(f"<b>Score:</b> {severity.score}/100 &nbsp;&nbsp; <b>Level:</b> {severity.label}", body),
-            Paragraph("Engineering Interpretation", heading),
-            Paragraph(interpretation, body),
-            Paragraph("Recommended Inspection Action", heading),
+            Paragraph("Limitations", styles["Heading2"]),
+            Paragraph(LIMITATIONS, styles["BodyText"]),
+            Paragraph(
+                "Future training note: export reviewed annotations to YOLO detection or segmentation format, train with Ultralytics, "
+                "then place the resulting model at models/best.pt for separate trained inference.",
+                styles["BodyText"],
+            ),
         ]
     )
-
-    for action in actions:
-        story.append(Paragraph(f"- {action}", body))
-
-    story.extend([Spacer(1, 0.15 * inch), Paragraph(f"<b>Disclaimer:</b> {DISCLAIMER}", small)])
     doc.build(story)
     return report_path
