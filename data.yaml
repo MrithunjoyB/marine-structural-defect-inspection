@@ -1,0 +1,15 @@
+path: data
+train: images/train
+val: images/val
+
+names:
+  0: corrosion
+  1: crack
+  2: coating_damage
+  3: weld_defect
+  4: dent
+  5: scratch
+  6: deformation
+  7: pitting
+  8: surface_anomaly
+  9: no_defect
