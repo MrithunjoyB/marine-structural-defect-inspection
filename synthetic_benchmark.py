@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 
 import cv2
 import numpy as np
@@ -12,26 +13,41 @@ from feature_extraction import extract_feature_maps
 from region_proposal import _components, propose_regions
 
 
-def generate_cases(seed: int=11) -> dict[str,tuple[np.ndarray,np.ndarray]]:
-    rng=np.random.default_rng(seed); cases={}
-    def base():
-        texture=rng.normal(0,5,(300,500,1)); return np.clip(155+np.repeat(texture,3,axis=2),0,255).astype(np.uint8)
-    image=base(); mask=np.zeros(image.shape[:2],np.uint8); cv2.line(image,(35,250),(460,45),(35,35,35),4); cv2.line(mask,(35,250),(460,45),255,9); cases["thin_crack"]=(image,mask)
-    image=base(); mask=np.zeros(image.shape[:2],np.uint8); pts=np.array([[30,135],[120,115],[230,145],[350,118],[470,145],[470,180],[320,165],[180,180],[30,170]]); cv2.fillPoly(image,[pts],(85,100,115)); cv2.fillPoly(mask,[pts],255); cases["weld_disturbance"]=(image,mask)
-    image=base(); mask=np.zeros(image.shape[:2],np.uint8)
-    for c in [(150,130),(175,155),(205,125),(340,190)]: cv2.circle(image,c,12,(55,65,75),-1); cv2.circle(mask,c,14,255,-1)
-    cases["pitting_cluster"]=(image,mask)
-    image=base(); mask=np.zeros(image.shape[:2],np.uint8); cv2.rectangle(image,(150,80),(350,230),(90,140,190),-1); cv2.rectangle(mask,(150,80),(350,230),255,-1); cases["colour_only"]=(image,mask)
-    image=base(); mask=np.zeros(image.shape[:2],np.uint8); patch=rng.integers(80,225,(120,170,3),dtype=np.uint8); image[90:210,165:335]=patch; mask[90:210,165:335]=255; cases["texture_only"]=(image,mask)
-    cases["normal_texture"]=(base(),np.zeros((300,500),np.uint8))
-    gradient=np.tile(np.linspace(75,220,500,dtype=np.uint8),(300,1)); cases["illumination_gradient"]=(cv2.cvtColor(gradient,cv2.COLOR_GRAY2BGR),np.zeros((300,500),np.uint8))
-    image=base(); image[:25]=0; image[-25:]=0; cases["black_border"]=(image,np.zeros((300,500),np.uint8))
-    image=base(); mask=np.zeros(image.shape[:2],np.uint8)
-    for c in [(90,80),(240,160),(420,220)]: cv2.circle(image,c,7,(255,255,255),-1)
-    cases["specular_highlights"]=(image,mask)
-    image=base(); cases["blur"]=(cv2.GaussianBlur(image,(9,9),2.5),np.zeros((300,500),np.uint8))
-    image=base(); noisy=np.clip(image.astype(float)+rng.normal(0,15,image.shape),0,255).astype(np.uint8); cases["gaussian_noise"]=(noisy,np.zeros((300,500),np.uint8))
-    return cases
+SYNTHETIC_CATEGORIES=("thin_crack","weld_disturbance","pitting_cluster","colour_only","texture_only","normal_texture","illumination_gradient","black_border","specular_highlights","blur","gaussian_noise")
+
+
+def generate_cases(seed:int=11,samples_per_category:int=3,with_parameters:bool=False):
+    cases={}; parameters={}
+    for category_index,category in enumerate(SYNTHETIC_CATEGORIES):
+        for sample_index in range(samples_per_category):
+            derived_seed=int.from_bytes(hashlib.sha256(f"{seed}:{category}:{sample_index}".encode()).digest()[:8],"big")
+            rng=np.random.default_rng(derived_seed); h,w=300,500
+            level=int(rng.integers(125,186)); texture_sigma=float(rng.uniform(3,11)); gradient=float(rng.uniform(-25,25))
+            texture=rng.normal(0,texture_sigma,(h,w,1)); ramp=np.linspace(-gradient,gradient,w)[None,:,None]
+            image=np.clip(level+np.repeat(texture+ramp,3,axis=2),0,255).astype(np.uint8); mask=np.zeros((h,w),np.uint8)
+            cx=int(rng.integers(90,w-90)); cy=int(rng.integers(65,h-65)); size=int(rng.integers(12,42)); angle=float(rng.uniform(-70,70)); intensity=int(rng.integers(28,105))
+            if category=="thin_crack":
+                length=int(rng.integers(180,390)); dx=int(np.cos(np.deg2rad(angle))*length/2); dy=int(np.sin(np.deg2rad(angle))*length/2); thickness=int(rng.integers(2,6)); cv2.line(image,(cx-dx,cy-dy),(cx+dx,cy+dy),(intensity,)*3,thickness); cv2.line(mask,(cx-dx,cy-dy),(cx+dx,cy+dy),255,thickness+4)
+            elif category=="weld_disturbance":
+                axes=(int(rng.integers(90,180)),int(rng.integers(14,35))); cv2.ellipse(image,(cx,cy),axes,angle,0,360,(intensity,intensity+15,intensity+30),-1); cv2.ellipse(mask,(cx,cy),axes,angle,0,360,255,-1)
+            elif category=="pitting_cluster":
+                for _ in range(int(rng.integers(4,9))):
+                    point=(cx+int(rng.integers(-55,56)),cy+int(rng.integers(-45,46))); radius=int(rng.integers(5,15)); cv2.circle(image,point,radius,(intensity,)*3,-1); cv2.circle(mask,point,radius+2,255,-1)
+            elif category=="colour_only": cv2.ellipse(image,(cx,cy),(size*2,size),angle,0,360,(intensity,140,205),-1); cv2.ellipse(mask,(cx,cy),(size*2,size),angle,0,360,255,-1)
+            elif category=="texture_only":
+                x1,x2=max(0,cx-size*2),min(w,cx+size*2); y1,y2=max(0,cy-size),min(h,cy+size); image[y1:y2,x1:x2]=rng.integers(55,225,(y2-y1,x2-x1,3),dtype=np.uint8); mask[y1:y2,x1:x2]=255
+            elif category=="illumination_gradient": image=np.clip(image.astype(float)+np.linspace(-55,55,w)[None,:,None],0,255).astype(np.uint8)
+            elif category=="black_border": border=int(rng.integers(10,30)); image[:border]=0; image[-border:]=0
+            elif category=="specular_highlights":
+                for _ in range(int(rng.integers(2,6))): cv2.circle(image,(int(rng.integers(20,w-20)),int(rng.integers(20,h-20))),int(rng.integers(4,10)),(255,255,255),-1)
+            elif category=="blur": image=cv2.GaussianBlur(image,(9,9),float(rng.uniform(1.5,4)))
+            elif category=="gaussian_noise": image=np.clip(image.astype(float)+rng.normal(0,float(rng.uniform(10,25)),image.shape),0,255).astype(np.uint8)
+            name=f"{category}_{sample_index+1:02d}"; cases[name]=(image,mask)
+            parameters[name]={"master_seed":seed,"derived_seed":derived_seed,"anomaly_type":category,"sample_index":sample_index,"position":[cx,cy],"size":size,"intensity":intensity,"orientation":angle,"background_level":level,"texture_sigma":texture_sigma,"gradient":gradient}
+    hashes=[]
+    for image,_ in cases.values(): hashes.append(hashlib.sha256(cv2.imencode(".png",image)[1].tobytes()).hexdigest())
+    assert len(hashes)==len(set(hashes)),"Synthetic generation produced an unintended exact duplicate"
+    return (cases,parameters) if with_parameters else cases
 
 
 def run_benchmark(output_csv: Path|None=None):

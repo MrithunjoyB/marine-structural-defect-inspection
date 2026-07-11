@@ -8,6 +8,9 @@
     "image_id", "dataset_id", "original_filename", "stored_filename", "sha256_hash",
     "width", "height", "channels", "file_format", "file_size", "source", "licence",
     "ground_truth_status", "annotation_path", "split", "duplicate_status",
-    "corruption_status", "imported_timestamp", "notes"
+    "corruption_status", "imported_timestamp", "notes", "perceptual_hash",
+    "group_id", "primary_class", "dataset_version", "duplicate_group_id",
+    "canonical_image_id", "duplicate_type", "split_eligible", "generation_seed",
+    "synthetic_anomaly_type", "generation_parameters"
   ]
 }

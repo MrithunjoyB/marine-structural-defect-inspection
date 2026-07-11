@@ -264,7 +264,17 @@ Development/Test experiments may use local development images and unknown ground
 
 ### Synthetic Intake
 
-The controlled generator creates thin cracks, elongated weld disturbances, pitting clusters, colour-only and texture-only anomalies, clean texture, illumination gradients, border artefacts, specular highlights, blur, and Gaussian noise. Each image is registered with an exact mask, reproducible seed, and generation-parameter report. Use this dataset to verify metrics and proposal behavior before real restricted data is available.
+The controlled generator creates balanced thin cracks, elongated weld disturbances, pitting clusters, colour-only and texture-only anomalies, clean texture, illumination gradients, border artefacts, specular highlights, blur, and Gaussian noise. A deterministic master seed derives a unique seed for every image; geometry, intensity, orientation, texture, background, and noise vary per sample. Each image is registered with an exact mask and complete generation parameters. Generation asserts that image-file SHA-256 values are unique unless duplication is explicitly requested.
+
+Image SHA-256 is computed only from encoded image-file bytes. Annotation hashes, metadata, and filenames do not determine image duplicates. The intake dashboard reports exact image duplicates, near duplicates, duplicate groups, unique images, and split-eligible images separately. Exact duplicates are excluded by default; perceptually similar and same-template synthetic variants remain available but are forced into one split to prevent leakage.
+
+### Dataset Management And Deletion
+
+Use **Manage Research Datasets** to preview and delete one registered version, every version of a Dataset ID, generated files, synthetic datasets, or the Development/Test store. Metadata-only deletion removes registry and manifest records while preserving owned files. Generated-files-only deletion preserves registration and raw data but removes processed outputs, splits, and reports. Complete deletion removes registry records and moves all dataset-owned files to `research_data/.trash/<timestamp>/<dataset_id>/` first.
+
+Every destructive operation requires a confirmation checkbox, the exact Dataset ID, and a final delete button. Cleanup previews list files, bytes, database rows, manifests, splits, and linked experiment IDs. Linked experiments block complete deletion by default; development experiments may be explicitly unlinked or cascade deleted, while final research experiments are never silently deleted or unlinked.
+
+Trash audit records preserve the reviewer, timestamp, mode, moved files, and removed records. Use **Restore deleted dataset** to restore files and metadata, or explicitly confirm **Permanently empty dataset trash**. Synthetic data can be cleared and regenerated with replacement or a new version. Streamlit cache clearing does not delete registered datasets or their files.
 
 ## Ablation Design
 

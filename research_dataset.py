@@ -57,6 +57,9 @@ class ImageManifestRecord:
     ground_truth_status:str; annotation_path:str; split:str; duplicate_status:str
     corruption_status:str; imported_timestamp:str; notes:str=""; perceptual_hash:str=""
     group_id:str=""; primary_class:str=""
+    dataset_version:str=""; duplicate_group_id:str=""; canonical_image_id:str=""
+    duplicate_type:str="unique"; split_eligible:int=1; generation_seed:str=""
+    synthetic_anomaly_type:str=""; generation_parameters:str=""
 
 
 @dataclass(frozen=True)
@@ -86,6 +89,15 @@ class DatasetRegistry:
             con.execute(f"CREATE TABLE IF NOT EXISTS images ({columns}, PRIMARY KEY(image_id))")
             con.execute("CREATE TABLE IF NOT EXISTS reviews (review_id TEXT PRIMARY KEY,image_id TEXT,reference_type TEXT,outcome TEXT,bbox_json TEXT,mask_path TEXT,reviewer_id TEXT,confidence REAL,notes TEXT,reviewed_timestamp TEXT)")
             con.execute("CREATE TABLE IF NOT EXISTS experiment_plans (plan_id TEXT PRIMARY KEY,experiment_id TEXT,dataset_id TEXT,dataset_version TEXT,split TEXT,selected_image_ids_json TEXT,configuration_json TEXT,manifest_hash TEXT,code_commit_hash TEXT,created_timestamp TEXT,status TEXT,reviewer_id TEXT)")
+            existing={row[1] for row in con.execute("PRAGMA table_info(images)")}
+            for field in fields:
+                if field not in existing:
+                    kind="INTEGER" if field in {"width","height","channels","file_size","split_eligible"} else "TEXT"
+                    default="1" if field=="split_eligible" else "''"
+                    con.execute(f"ALTER TABLE images ADD COLUMN {field} {kind} DEFAULT {default}")
+            con.execute("UPDATE images SET dataset_version=COALESCE((SELECT dataset_version FROM datasets WHERE datasets.dataset_id=images.dataset_id ORDER BY registered_timestamp DESC LIMIT 1),'') WHERE dataset_version='' OR dataset_version IS NULL")
+            con.execute("UPDATE images SET duplicate_type=CASE duplicate_status WHEN 'exact duplicate' THEN 'exact image duplicate' WHEN 'possible near duplicate' THEN 'near duplicate' ELSE 'unique' END WHERE duplicate_type='' OR duplicate_type IS NULL")
+            con.execute("UPDATE images SET split_eligible=0 WHERE duplicate_type='exact image duplicate'")
 
     def register_dataset(self,metadata:DatasetMetadata,overwrite=False):
         metadata.validate(); now=datetime.now().isoformat(timespec="seconds")
@@ -151,19 +163,27 @@ class DatasetRegistry:
         (self.registry_dir/"dataset_manifest.json").write_text(json.dumps(payload,indent=2,default=str))
 
 
-def ingest_files(registry:DatasetRegistry,metadata:DatasetMetadata,files:Iterable[tuple[str,bytes]],annotation_files:dict[str,bytes]|None=None)->tuple[list[ImageManifestRecord],ValidationReport]:
-    registry.register_dataset(metadata,overwrite=True); annotation_files=annotation_files or {}; records=[]; existing=registry.images(); existing_hashes=set(existing.sha256_hash) if not existing.empty else set(); existing_phashes=existing.perceptual_hash.tolist() if not existing.empty else []
+def ingest_files(registry:DatasetRegistry,metadata:DatasetMetadata,files:Iterable[tuple[str,bytes]],annotation_files:dict[str,bytes]|None=None,registration_mode="cancel",generation_parameters:dict|None=None)->tuple[list[ImageManifestRecord],ValidationReport]:
+    datasets=registry.datasets(); exists=not datasets.empty and bool(((datasets.dataset_id==metadata.dataset_id)&(datasets.dataset_version==metadata.dataset_version)).any())
+    if exists and registration_mode=="cancel": raise ValueError("Dataset ID and version already exist; choose replace or create a new version")
+    if exists and registration_mode=="replace":
+        with registry.connect() as con: con.execute("DELETE FROM images WHERE dataset_id=? AND dataset_version=?",(metadata.dataset_id,metadata.dataset_version))
+    registry.register_dataset(metadata,overwrite=registration_mode=="replace"); annotation_files=annotation_files or {}; generation_parameters=generation_parameters or {}; records=[]; existing=registry.images(); existing_hashes={}
+    if not existing.empty:
+        for _,row in existing[existing.corruption_status=="valid"].iterrows(): existing_hashes.setdefault(row.sha256_hash,row.image_id)
+    existing_phashes=[(row.perceptual_hash,row.image_id) for _,row in existing.iterrows() if row.perceptual_hash]
     raw_dir=registry.root/"raw"/metadata.dataset_id; ann_dir=registry.root/"annotations"/metadata.dataset_id; raw_dir.mkdir(parents=True,exist_ok=True); ann_dir.mkdir(parents=True,exist_ok=True)
     class_counts={}; invalid_annotations=missing_annotations=0
     for original,data in files:
-        suffix=Path(original).suffix.lower(); sha=hashlib.sha256(data).hexdigest(); stored=f"{sha[:12]}_{Path(original).name}"; corruption="valid"; width=height=channels=0; phash=""; duplicate="exact duplicate" if sha in existing_hashes else "unique"
+        suffix=Path(original).suffix.lower(); sha=hashlib.sha256(data).hexdigest(); stored=f"{sha[:12]}_{Path(original).name}"; corruption="valid"; width=height=channels=0; phash=""; canonical=existing_hashes.get(sha,""); duplicate_type="exact image duplicate" if canonical else "unique"; duplicate="exact duplicate" if canonical else "unique"; duplicate_group=f"sha256:{sha}" if canonical else ""
         if not data or suffix not in SUPPORTED_IMAGE_SUFFIXES: corruption="zero-byte" if not data else "unsupported format"
         image=cv2.imdecode(np.frombuffer(data,np.uint8),cv2.IMREAD_UNCHANGED) if corruption=="valid" else None
         if image is None and corruption=="valid": corruption="corrupt"
         if image is not None:
             height,width=image.shape[:2]; channels=1 if image.ndim==2 else image.shape[2]; phash=perceptual_hash(image)
             if width<8 or height<8 or width>20000 or height>20000: corruption="extreme resolution"
-            if duplicate=="unique" and any(hamming_distance(phash,p)<=5 for p in existing_phashes if p): duplicate="possible near duplicate"
+            near=next((image_id for value,image_id in existing_phashes if hamming_distance(phash,value)<=3),"")
+            if duplicate_type=="unique" and near: duplicate_type="near duplicate"; duplicate="possible near duplicate"; duplicate_group=f"near:{near}"; canonical=near
             (raw_dir/stored).write_bytes(data)
         ann_path=""; primary_class=""
         candidate_names=[Path(original).stem+ext for ext in (".txt",".json",".xml",".csv",".png")]
@@ -176,8 +196,9 @@ def ingest_files(registry:DatasetRegistry,metadata:DatasetMetadata,files:Iterabl
                 invalid_annotations+=int(not valid)
                 if classes: primary_class=classes[0]
                 for item in classes: class_counts[item]=class_counts.get(item,0)+1
-        records.append(ImageManifestRecord(str(uuid4()),metadata.dataset_id,original,stored,sha,width,height,channels,suffix.lstrip("."),len(data),metadata.source_name,metadata.licence,metadata.ground_truth_status,ann_path,"unassigned",duplicate,corruption,datetime.now().isoformat(timespec="seconds"),"",phash,"",primary_class))
-        existing_hashes.add(sha); existing_phashes.append(phash)
+        image_id=str(uuid4()); params=generation_parameters.get(Path(original).stem,{})
+        records.append(ImageManifestRecord(image_id,metadata.dataset_id,original,stored,sha,width,height,channels,suffix.lstrip("."),len(data),metadata.source_name,metadata.licence,metadata.ground_truth_status,ann_path,"unassigned",duplicate,corruption,datetime.now().isoformat(timespec="seconds"),"",phash,"",primary_class,metadata.dataset_version,duplicate_group,canonical,duplicate_type,0 if duplicate_type=="exact image duplicate" else 1,str(params.get("derived_seed","")),params.get("anomaly_type",""),json.dumps(params,sort_keys=True)))
+        existing_hashes.setdefault(sha,image_id); existing_phashes.append((phash,image_id))
     registry.add_images(records); report=build_validation_report(records,class_counts,missing_annotations,invalid_annotations); _save_validation(registry,metadata.dataset_id,records,report); return records,report
 
 
@@ -227,17 +248,22 @@ def validate_annotation(fmt,data,width,height):
 
 def prepare_split(registry:DatasetRegistry,dataset_id,ratios=(.7,.15,.15),seed=42,override_leakage=False):
     if abs(sum(ratios)-1)>1e-6 or any(v<0 for v in ratios): raise ValueError("Split ratios must be non-negative and sum to 1")
-    images=registry.images(dataset_id); valid=images[images.corruption_status=="valid"].copy(); rng=random.Random(seed)
-    groups={}; representatives=[]
-    for _,row in valid.sort_values("image_id").iterrows():
-        key=str(row.group_id).strip() if pd.notna(row.group_id) else ""
-        if key:
-            if row.perceptual_hash:representatives.append((row.perceptual_hash,key))
-        else:
-            match=next((item for item in representatives if row.perceptual_hash and hamming_distance(row.perceptual_hash,item[0])<=5),None)
-            if match:key=match[1]
-            else:key=row.sha256_hash; representatives.append((row.perceptual_hash,key))
-        group=groups.setdefault(key,{"ids":[],"class":row.primary_class or "__unlabelled__"}); group["ids"].append(row.image_id)
+    images=registry.images(dataset_id); valid=images[(images.corruption_status=="valid")&(images.split_eligible.astype(int)==1)].copy(); rng=random.Random(seed)
+    ordered=valid.sort_values("image_id").reset_index(drop=True); parent=list(range(len(ordered)))
+    def find(index):
+        while parent[index]!=index: parent[index]=parent[parent[index]]; index=parent[index]
+        return index
+    def union(left,right):
+        left,right=find(left),find(right)
+        if left!=right: parent[right]=left
+    for left in range(len(ordered)):
+        for right in range(left+1,len(ordered)):
+            a,b=ordered.iloc[left],ordered.iloc[right]; group_a=str(a.group_id).strip() if pd.notna(a.group_id) else ""; group_b=str(b.group_id).strip() if pd.notna(b.group_id) else ""
+            related=(group_a and group_a==group_b) or (a.synthetic_anomaly_type and a.synthetic_anomaly_type==b.synthetic_anomaly_type) or (a.perceptual_hash and b.perceptual_hash and hamming_distance(a.perceptual_hash,b.perceptual_hash)<=5)
+            if related: union(left,right)
+    groups={}
+    for index,row in ordered.iterrows():
+        key=str(find(index)); group=groups.setdefault(key,{"ids":[],"class":row.primary_class or "__unlabelled__"}); group["ids"].append(row.image_id)
     buckets={}
     for key,value in groups.items():buckets.setdefault(value["class"],[]).append(key)
     assignments={}
@@ -255,6 +281,7 @@ def prepare_split(registry:DatasetRegistry,dataset_id,ratios=(.7,.15,.15),seed=4
 
 
 def check_leakage(images:pd.DataFrame):
+    images=images[(images.split!="unassigned")&(images.split_eligible.astype(int)==1)]
     def conflicts(column):
         if column not in images:return 0
         grouped=images[images[column].astype(str)!=""].groupby(column).split.nunique(); return int((grouped>1).sum())
@@ -284,14 +311,15 @@ def create_configuration_snapshot(parameters:dict):
     return {"preprocessing_settings":parameters.get("preprocessing",{}),"proposal_settings":parameters.get("proposal",{}),"feature_weights":parameters.get("feature_weights",{}),"thresholds":parameters.get("thresholds",{}),"border_margin":parameters.get("border_margin"),"maximum_regions":parameters.get("maximum_regions"),"ablation_switches":parameters.get("ablation",{}),"code_commit_hash":commit or "unknown","python_version":sys.version,"package_versions":packages,"operating_system":platform.platform(),"created_timestamp":datetime.now().isoformat(timespec="seconds")}
 
 
-def register_synthetic_benchmark(registry:DatasetRegistry,dataset_id="synthetic-controlled",version="1.0",seed=11):
+def register_synthetic_benchmark(registry:DatasetRegistry,dataset_id="synthetic-controlled",version="1.0",seed=11,registration_mode="cancel"):
     from synthetic_benchmark import generate_cases
     metadata=DatasetMetadata(dataset_id,"Controlled Synthetic Benchmark",version,"synthetic","StructVision generator","local generator","StructVision-AI","MIT-compatible generated data",True,True,"Generated by synthetic_benchmark.py",date.today().isoformat(),"structural surface anomalies","verified expert annotation","binary masks",f"seed={seed}")
-    files=[]; annotations={}
-    for name,(image,mask) in generate_cases(seed).items():
+    files=[]; annotations={}; cases,parameters=generate_cases(seed,with_parameters=True)
+    for name,(image,mask) in cases.items():
         _,encoded=cv2.imencode(".png",image); _,mask_encoded=cv2.imencode(".png",mask); filename=f"{name}.png"; files.append((filename,encoded.tobytes())); annotations[filename]=mask_encoded.tobytes()
-    records,report=ingest_files(registry,metadata,files,annotations)
-    params=registry.root/"reports"/dataset_id/"generation_parameters.json"; params.parent.mkdir(parents=True,exist_ok=True); params.write_text(json.dumps({"seed":seed,"cases":[r.original_filename for r in records]},indent=2)); return records,report
+    records,report=ingest_files(registry,metadata,files,annotations,registration_mode,parameters)
+    hashes=[record.sha256_hash for record in records]; assert len(hashes)==len(set(hashes)),"Synthetic benchmark contains unintended exact image duplicates"
+    params=registry.root/"reports"/dataset_id/"generation_parameters.json"; params.parent.mkdir(parents=True,exist_ok=True); params.write_text(json.dumps({"master_seed":seed,"cases":parameters},indent=2)); return records,report
 
 
 def perceptual_hash(image):
@@ -308,6 +336,6 @@ def build_validation_report(records,class_counts=None,missing_annotations=0,inva
     valid=sum(r.corruption_status=="valid" for r in records); annotated=sum(bool(r.annotation_path) for r in records); sizes={}
     for r in records:
         key=f"{r.width}x{r.height}"; sizes[key]=sizes.get(key,0)+1
-    return ValidationReport(len(records),valid,len(records)-valid,sum(r.duplicate_status=="exact duplicate" for r in records),sum(r.duplicate_status=="possible near duplicate" for r in records),annotated,len(records)-annotated,class_counts or {},sizes,missing_annotations,invalid_annotations)
+    return ValidationReport(len(records),valid,len(records)-valid,sum(r.duplicate_type=="exact image duplicate" for r in records),sum(r.duplicate_type=="near duplicate" for r in records),annotated,len(records)-annotated,class_counts or {},sizes,missing_annotations,invalid_annotations)
 def _save_validation(registry,dataset_id,records,report):
     directory=registry.root/"reports"/dataset_id; directory.mkdir(parents=True,exist_ok=True); pd.DataFrame([asdict(r) for r in records]).to_csv(directory/"validation_records.csv",index=False); (directory/"validation_report.json").write_text(json.dumps(report.to_dict(),indent=2))
