@@ -29,7 +29,8 @@ def generate_cases(seed: int=11) -> dict[str,tuple[np.ndarray,np.ndarray]]:
     image=base(); mask=np.zeros(image.shape[:2],np.uint8)
     for c in [(90,80),(240,160),(420,220)]: cv2.circle(image,c,7,(255,255,255),-1)
     cases["specular_highlights"]=(image,mask)
-    image=base(); noisy=np.clip(image.astype(float)+rng.normal(0,15,image.shape),0,255).astype(np.uint8); cases["noise_blur"]=(cv2.GaussianBlur(noisy,(7,7),2),np.zeros((300,500),np.uint8))
+    image=base(); cases["blur"]=(cv2.GaussianBlur(image,(9,9),2.5),np.zeros((300,500),np.uint8))
+    image=base(); noisy=np.clip(image.astype(float)+rng.normal(0,15,image.shape),0,255).astype(np.uint8); cases["gaussian_noise"]=(noisy,np.zeros((300,500),np.uint8))
     return cases
 
 

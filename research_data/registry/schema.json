@@ -1,0 +1,13 @@
+{
+  "dataset_required_fields": [
+    "dataset_id", "dataset_name", "dataset_version", "source_type", "source_name",
+    "provider_author", "licence", "date_acquired", "domain_category",
+    "ground_truth_status", "annotation_format"
+  ],
+  "image_manifest_fields": [
+    "image_id", "dataset_id", "original_filename", "stored_filename", "sha256_hash",
+    "width", "height", "channels", "file_format", "file_size", "source", "licence",
+    "ground_truth_status", "annotation_path", "split", "duplicate_status",
+    "corruption_status", "imported_timestamp", "notes"
+  ]
+}

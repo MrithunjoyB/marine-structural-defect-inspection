@@ -95,6 +95,8 @@ These are candidate labels for dataset creation, not trained predictions.
 ├── evaluation.py
 ├── experiment_tracking.py
 ├── research_evaluation.py
+├── research_dataset.py
+├── dataset_intake.py
 ├── synthetic_benchmark.py
 ├── yolo_inference.py
 ├── report.py
@@ -215,6 +217,54 @@ The baseline rankings use mean anomaly-heatmap evidence and are capped at eight 
 The Research Evaluation page supports filtering by experiment, reviewer, image, method, status, and date range. Selected or filtered records can be exported as CSV or JSON before deletion. Confirmation is required to delete selected rows, one experiment, one image, all development records, all records, or reset the SQLite store. Every deletion reports the row count and affected experiment IDs, then recomputes summaries and charts.
 
 The **Legacy Record Migration** section detects historical JSON rows missing `record_id`, `review_status`, `not_reviewed`, or `experiment_status`. Reviewers may keep them unchanged, explicitly migrate selected rows into SQLite with corrected baseline semantics, or confirm deletion from the legacy JSON. Historical records are never changed silently.
+
+## Research Dataset Intake
+
+The **Research Dataset Intake** page registers and validates real inspection data before an experiment. It supports one image, image batches, ZIP archives, optional annotations, controlled synthetic generation, reference-ground-truth review, deterministic split preparation, validation exports, and dataset manifest export.
+
+Required registration captures dataset ID/name/version, source type and reference, provider, licence and usage permissions, citation, acquisition date, domain, ground-truth quality, annotation format, and notes. Supported annotation formats are YOLO boxes, YOLO segmentation, COCO JSON, Pascal VOC, binary masks, CSV regions, and custom formats. The current automated bounds checks cover normalized YOLO coordinates, non-empty masks, and duplicate COCO annotation IDs; other formats remain visible for explicit validation and review.
+
+**Do not commit professor-provided, private, restricted, or unlicensed images to the public GitHub repository.**
+
+Professor-provided data should be registered as `professor-provided`, stored only through the ignored `research_data/raw/` runtime area, assigned its supplied licence/restrictions, and used in Development/Test mode until provenance and ground truth permit final evaluation. Unknown or restricted licences are blocked from public research export unless a reviewer records an explicit warning override.
+
+### Research Data Structure
+
+```text
+research_data/
+├── registry/
+│   ├── datasets.sqlite          # ignored runtime registry
+│   ├── dataset_manifest.json    # ignored generated manifest
+│   └── schema.json              # Git-tracked schema
+├── raw/<dataset_id>/
+├── processed/<dataset_id>/
+├── annotations/<dataset_id>/
+├── splits/<dataset_id>/
+├── reports/<dataset_id>/
+└── exports/
+```
+
+Runtime datasets, SQLite files, annotations, reports, split manifests, exports, and image formats are ignored by Git. Only documentation, schemas, templates, and deliberately reviewed small synthetic assets may be tracked.
+
+### Manifest And Validation
+
+Every image receives an immutable image ID plus dataset ID, original/stored names, SHA-256, dimensions, channels, format, byte size, source, licence, ground-truth status, annotation path, split, exact/near-duplicate status, corruption status, import timestamp, and notes. SHA-256 detects renamed exact duplicates; perceptual hashes flag possible near duplicates.
+
+Validation reports include total/valid/corrupt files, exact and possible near duplicates, annotation coverage, class and size distributions, missing annotations, and invalid annotations. Reports are downloadable as CSV and JSON.
+
+### Splits And Leakage
+
+The default split is 70/15/15 with a deterministic seed. Available class labels are stratified while exact duplicates, perceptual near duplicates, and explicit sequence/component groups stay together. Finalization checks duplicate hashes, near duplicates, and group IDs across splits and blocks leakage unless an explicit override is confirmed. The resulting split manifest records every image assignment.
+
+### Experiment Reproducibility
+
+Research Evaluation can create an experiment from a registered dataset/version/split with subset size, reviewer, methods, status, parameters, and random seed. The saved JSON records the manifest hash, selected image IDs, preprocessing/proposal/weight/threshold settings, border margin, maximum regions, ablations, Git commit, Python and package versions, operating system, and creation time.
+
+Development/Test experiments may use local development images and unknown ground truth and remain excluded from final summaries by default. Final Research Evaluation requires a registered dataset, verified or reviewer-estimated ground truth, source/licence metadata, and a configuration snapshot; unknown provenance or licence is blocked unless explicitly overridden with a warning.
+
+### Synthetic Intake
+
+The controlled generator creates thin cracks, elongated weld disturbances, pitting clusters, colour-only and texture-only anomalies, clean texture, illumination gradients, border artefacts, specular highlights, blur, and Gaussian noise. Each image is registered with an exact mask, reproducible seed, and generation-parameter report. Use this dataset to verify metrics and proposal behavior before real restricted data is available.
 
 ## Ablation Design
 

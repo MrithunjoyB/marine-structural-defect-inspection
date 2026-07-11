@@ -11,7 +11,8 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from config import DEFAULT_LABEL_CLASSES, OUTPUT_DIR, PROJECT_SUBTITLE, PROJECT_TITLE, REPORT_DIR, UPLOAD_DIR
+from config import BASE_DIR, DEFAULT_LABEL_CLASSES, OUTPUT_DIR, PROJECT_SUBTITLE, PROJECT_TITLE, REPORT_DIR, UPLOAD_DIR
+from dataset_intake import render_dataset_intake
 from dataset_export import export_dataset
 from evaluation import evaluate_method, evaluation_tables
 from feature_extraction import extract_feature_maps, save_feature_maps
@@ -184,7 +185,7 @@ def main() -> None:
                 "use_refinement": st.checkbox("Mask refinement",True),
             })
 
-        analyze = st.button("Analyze Selected Image", type="primary", use_container_width=True)
+        analyze = st.button("Analyze Selected Image", type="primary", width="stretch")
 
     if analyze:
         if not uploaded_files:
@@ -203,6 +204,7 @@ def main() -> None:
         "Report Generation",
         "Future Model Training",
         "Research Evaluation",
+        "Research Dataset Intake",
     )
     active_page = st.radio(
         "Workspace page",
@@ -232,14 +234,14 @@ def main() -> None:
         else:
             cols = st.columns(2)
             cols[0].caption("Uploaded image")
-            cols[0].image(Image.open(st.session_state.image_path), use_container_width=True)
+            cols[0].image(Image.open(st.session_state.image_path), width="stretch")
             cols[1].caption("Preprocessed analysis image")
-            cols[1].image(st.session_state.processed, channels="BGR", use_container_width=True)
+            cols[1].image(st.session_state.processed, channels="BGR", width="stretch")
             yolo = st.session_state.yolo_result
             st.write(yolo.message)
             if yolo.available and yolo.annotated_path:
-                st.image(yolo.annotated_path.as_posix(), caption="Trained YOLO predictions", use_container_width=True)
-                st.dataframe(pd.DataFrame([pred.to_row() for pred in yolo.predictions]), use_container_width=True)
+                st.image(yolo.annotated_path.as_posix(), caption="Trained YOLO predictions", width="stretch")
+                st.dataframe(pd.DataFrame([pred.to_row() for pred in yolo.predictions]), width="stretch")
 
     if active_page == "Feature Maps":
         st.subheader("Feature Maps")
@@ -252,9 +254,9 @@ def main() -> None:
                 for col, (name, fmap) in zip(cols, fmap_items[row_start : row_start + 3]):
                     col.caption(name)
                     if fmap.ndim == 2:
-                        col.image(fmap, clamp=True, use_container_width=True)
+                        col.image(fmap, clamp=True, width="stretch")
                     else:
-                        col.image(fmap, channels="BGR", use_container_width=True)
+                        col.image(fmap, channels="BGR", width="stretch")
 
     if active_page == "Region Proposals":
         st.subheader("Region Proposals")
@@ -263,7 +265,7 @@ def main() -> None:
             st.info("Run analysis to create region proposals.")
         else:
             visualization_mode = st.radio("Proposal visualization", ["boxes only", "masks only", "boxes + masks"], horizontal=True)
-            st.image(proposal_result.visualization_paths[visualization_mode].as_posix(), caption="Final ranked visual anomaly candidates", use_container_width=True)
+            st.image(proposal_result.visualization_paths[visualization_mode].as_posix(), caption="Final ranked visual anomaly candidates", width="stretch")
             diagnostics = proposal_result.diagnostics
             stage_counts = [
                 ("Raw", diagnostics.raw_components), ("Filtered", diagnostics.after_filtering),
@@ -275,7 +277,7 @@ def main() -> None:
                 cols = st.columns(min(4, len(stage_counts) - start))
                 for col, (label, value) in zip(cols, stage_counts[start:start + 4]):
                     col.metric(label, value)
-            st.dataframe(pd.DataFrame([proposal.to_row() for proposal in proposal_result.proposals]), use_container_width=True)
+            st.dataframe(pd.DataFrame([proposal.to_row() for proposal in proposal_result.proposals]), width="stretch")
             show_debug = st.checkbox("Display rejected/noisy candidate stages", value=False)
             if show_debug:
                 st.caption("Pipeline debug panel")
@@ -287,11 +289,11 @@ def main() -> None:
                 removed[4].metric("Merged", diagnostics.merged_candidates)
                 st.json(diagnostics.rejection_reasons)
                 for stage, path in diagnostics.stage_overlay_paths.items():
-                    st.image(path.as_posix(), caption=f"{stage.replace('_', ' ').title()}", use_container_width=True)
+                    st.image(path.as_posix(), caption=f"{stage.replace('_', ' ').title()}", width="stretch")
             st.caption("Algorithm comparison")
             comparison_cols = st.columns(4)
             for col, (name, path) in zip(comparison_cols, proposal_result.comparison_paths.items()):
-                col.image(path.as_posix(), caption=f"{name} | {proposal_result.comparison_counts[name]} regions", use_container_width=True)
+                col.image(path.as_posix(), caption=f"{name} | {proposal_result.comparison_counts[name]} regions", width="stretch")
             for proposal in proposal_result.proposals:
                 with st.expander(f"{proposal.region_id} technical evidence"):
                     mask_cols=st.columns(3)
@@ -328,7 +330,7 @@ def main() -> None:
                     crop_cols = st.columns(3)
                     crops = create_region_crops(st.session_state.processed, st.session_state.feature_maps, proposal)
                     for col, (name, crop) in zip(crop_cols, crops.items()):
-                        col.image(crop, channels="BGR", caption=name, use_container_width=False)
+                        col.image(crop, channels="BGR", caption=name, width="content")
                     st.caption(proposal.explanation)
                     st.json({
                         "edge_density": round(proposal.edge_density, 3), "texture_variation": round(proposal.texture_score, 3),
@@ -426,7 +428,7 @@ def main() -> None:
                     st.session_state.evaluation_rows=rows
             if st.session_state.evaluation_rows:
                 per_image,dataset=evaluation_tables(st.session_state.evaluation_rows)
-                st.dataframe(per_image,use_container_width=True); st.dataframe(dataset,use_container_width=True)
+                st.dataframe(per_image,width="stretch"); st.dataframe(dataset,width="stretch")
                 st.download_button("Download Evaluation CSV",per_image.to_csv(index=False).encode(),"proposal_evaluation.csv","text/csv")
 
     if active_page == "Report Generation":
@@ -466,7 +468,11 @@ def main() -> None:
             feature_maps=st.session_state.feature_maps,
             review_start_time=st.session_state.review_start_time,
             review_completion_time=st.session_state.review_completion_time,
+            preprocessing_settings=st.session_state.preprocess_settings,
         )
+
+    if active_page == "Research Dataset Intake":
+        render_dataset_intake(BASE_DIR)
 
 
 if __name__ == "__main__":

@@ -28,3 +28,24 @@ models/*.pt
 runs/
 data/images/
 data/labels/
+
+# Research intake runtime data: never commit private/restricted datasets.
+research_data/raw/
+research_data/processed/
+research_data/annotations/
+research_data/splits/
+research_data/reports/
+research_data/exports/
+research_data/registry/*.sqlite
+research_data/registry/*.sqlite-*
+research_data/registry/dataset_manifest.json
+research_data/**/*professor*
+research_data/**/*.jpg
+research_data/**/*.jpeg
+research_data/**/*.png
+research_data/**/*.tif
+research_data/**/*.tiff
+research_data/**/*.bmp
+research_data/**/*.webp
+!research_data/registry/schema.json
+!research_data/README.md

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import json
 import os
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from experiment_tracking import (
     records_to_json,
     with_version,
 )
+from research_dataset import DatasetRegistry, FINAL_STATUS
 
 
 RECALL_CHART_COLUMNS = {
@@ -49,6 +51,17 @@ EFFICIENCY_CHART_COLUMNS = {
     "Mean proposals before first useful": "mean_proposals_reviewed_before_first_useful",
 }
 FALSE_PROPOSAL_COLUMN = "mean_false_proposals_per_image"
+METHOD_DISPLAY_NAMES={
+    "contour-only baseline":"Contour baseline",
+    "fixed-threshold baseline":"Fixed-threshold baseline",
+    "multi-scale fused method":"Multi-scale fused",
+    "refined contextual method":"Refined contextual",
+}
+EMPTY_METRIC_MESSAGES={
+    "annotation_acceptance_rate":"No accepted or rejected proposals are available, so acceptance rate is undefined.",
+    "mean_proposals_reviewed_before_first_useful":"No reviewer-confirmed useful proposal rank is available.",
+    "mean_false_proposals_per_image":"No manually reviewed rejected proposals are available for this metric.",
+}
 
 
 def render_research_evaluation(
@@ -59,6 +72,7 @@ def render_research_evaluation(
     feature_maps,
     review_start_time: str | None,
     review_completion_time: str | None,
+    preprocessing_settings: dict | None = None,
 ) -> None:
     st.subheader("Research Evaluation")
     database_path = Path(os.environ.get("STRUCTVISION_RESEARCH_DB", output_dir / "research_evaluation.sqlite3"))
@@ -68,10 +82,35 @@ def render_research_evaluation(
         store, image_name, annotations, proposal_result, feature_maps,
         review_start_time, review_completion_time,
     )
+    _render_registered_dataset_experiment(output_dir.parent, preprocessing_settings or {})
     st.divider()
     _render_dashboard_and_management(store)
     st.divider()
     _render_legacy_migration(store, legacy_json_path)
+
+
+def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:dict)->None:
+    st.markdown("### Create Experiment from Registered Dataset")
+    registry=DatasetRegistry(base_dir/"research_data"); datasets=registry.datasets()
+    if datasets.empty:
+        st.info("Register a dataset in Research Dataset Intake before creating a reproducible experiment."); return
+    dataset_id=st.selectbox("Registered dataset",datasets.dataset_id.unique(),key="registered_experiment_dataset")
+    versions=datasets[datasets.dataset_id==dataset_id].dataset_version.tolist(); version=st.selectbox("Registered dataset version",versions)
+    images=registry.images(dataset_id); splits=["all"]+sorted(value for value in images.split.unique().tolist() if value and value!="unassigned")
+    row=st.columns(3); split=row[0].selectbox("Dataset split",splits); subset=row[1].number_input("Subset size",1,max(len(images),1),min(len(images),100) if len(images) else 1); seed=row[2].number_input("Experiment random seed",0,1000000,42)
+    row=st.columns(3); status=row[0].selectbox("Registered experiment status",["Development / Test",FINAL_STATUS]); reviewer=row[1].text_input("Registered experiment reviewer"); experiment_id=row[2].text_input("Registered experiment ID")
+    methods=st.multiselect("Proposal methods",list(METHOD_NAMES),default=list(METHOD_NAMES))
+    default_config={"preprocessing":preprocessing_settings,"proposal":{},"feature_weights":{},"thresholds":{},"border_margin":preprocessing_settings.get("border_margin"),"maximum_regions":preprocessing_settings.get("max_regions"),"ablation":{key:value for key,value in preprocessing_settings.items() if key.startswith("use_")}}
+    configuration_text=st.text_area("Parameter configuration (JSON)",value=json.dumps(default_config,indent=2),height=220)
+    override=st.checkbox("Override final-experiment provenance/licence restrictions",help="Use only after reviewing the warning and documenting the reason.")
+    if st.button("Create Registered Dataset Experiment"):
+        try:
+            if not experiment_id.strip() or not reviewer.strip() or not methods: raise ValueError("Experiment ID, reviewer, and at least one method are required")
+            parameters=json.loads(configuration_text)
+            path=registry.create_experiment_plan(experiment_id,dataset_id,version,split,int(subset),status,reviewer,methods,parameters,int(seed),override)
+            st.success("Created reproducible registered-dataset experiment plan.")
+            st.download_button("Download Experiment Configuration JSON",path.read_bytes(),path.name,"application/json")
+        except (ValueError,json.JSONDecodeError) as error: st.error(str(error))
 
 
 def _render_recording(store, image_name, annotations, proposal_result, feature_maps, review_start, review_completion):
@@ -139,7 +178,7 @@ def _render_recording(store, image_name, annotations, proposal_result, feature_m
     if pending:
         preview = pd.DataFrame([record.to_dict() for record in pending])
         st.caption("Preview: reviewed and not-reviewed method rows")
-        st.dataframe(preview[IMAGE_TABLE_COLUMNS], use_container_width=True)
+        st.dataframe(preview[IMAGE_TABLE_COLUMNS], width="stretch")
         duplicates = store.duplicate_count(pending)
         duplicate_action = "cancel"
         if duplicates:
@@ -188,7 +227,7 @@ def _render_dashboard_and_management(store: ExperimentStore) -> None:
         st.caption("Image-level records")
         display_columns = [column for column in IMAGE_TABLE_COLUMNS if column in image_table]
         selection = st.dataframe(
-            image_table[display_columns], use_container_width=True, hide_index=True,
+            image_table[display_columns], width="stretch", hide_index=True,
             on_select="rerun", selection_mode="multi-row", key="research_record_selection",
         )
         selected_indices = list(selection.selection.rows)
@@ -200,7 +239,7 @@ def _render_dashboard_and_management(store: ExperimentStore) -> None:
         export_cols[1].download_button(f"Download {export_label} records JSON", records_to_json(export_data), "experiment_records.json", "application/json")
 
         st.caption("Dataset-level summary")
-        st.dataframe(_display_na(summary), use_container_width=True, hide_index=True)
+        st.dataframe(_display_na(summary), width="stretch", hide_index=True)
         _render_charts(summary)
         _render_destructive_controls(store, all_records, selected)
 
@@ -272,8 +311,8 @@ def _delete_and_refresh(result) -> None:
 def _render_charts(summary: pd.DataFrame) -> None:
     st.markdown("#### Top-K Proposal Recall by Method")
     st.caption("Denominator: eligible anomaly-present images with verified or reviewer-estimated ground truth and a reviewer-confirmed useful rank.")
-    if summary.empty or summary[list(RECALL_CHART_COLUMNS.values())].dropna(how="all").empty:
-        st.info("No eligible anomaly-present experiments are available for Top-K recall.")
+    if not has_valid_metric(summary,list(RECALL_CHART_COLUMNS.values())):
+        st.info("No eligible anomaly-present experiments with verified or reviewer-estimated ground truth are available.")
     else:
         _grouped_chart(summary, RECALL_CHART_COLUMNS, "Top-K Proposal Recall by Method", "Proposal recall", percent=True)
 
@@ -289,37 +328,61 @@ def _render_charts(summary: pd.DataFrame) -> None:
 
     st.markdown("#### False Proposals per Reviewed Image")
     st.caption("False proposals are explicitly rejected proposals from manually reviewed methods only.")
-    _single_chart(summary, FALSE_PROPOSAL_COLUMN, "False Proposals per Reviewed Image", "Mean rejected proposals")
+    _single_chart(summary, FALSE_PROPOSAL_COLUMN, "False Proposals per Reviewed Image", "Mean rejected proposals", require_positive=True)
 
 
 def _grouped_chart(summary, mapping, title, ylabel, percent=False):
     values = summary[["method"] + list(mapping.values())].copy()
-    if values[list(mapping.values())].dropna(how="all").empty:
+    if not has_valid_metric(values,list(mapping.values())):
         st.info(f"{title}: N/A for the current records.")
         return
-    figure, axis = plt.subplots(figsize=(10, 4.5))
+    figure, axis = plt.subplots(figsize=(9, chart_height(len(values))))
     x = np.arange(len(values)); width = .8 / len(mapping)
     for index, (label, column) in enumerate(mapping.items()):
-        axis.bar(x + (index - (len(mapping)-1)/2)*width, values[column], width, label=label)
-    axis.set_xticks(x, values["method"], rotation=18, ha="right")
+        bars=axis.bar(x + (index - (len(mapping)-1)/2)*width, values[column], width, label=label)
+        _label_bars(axis,bars,percent)
+    axis.set_xticks(x, [METHOD_DISPLAY_NAMES.get(value,value) for value in values["method"]], rotation=14, ha="right")
     axis.set_xlabel("Proposal method"); axis.set_ylabel(ylabel); axis.set_title(title); axis.legend(title="Metric")
     if percent:
         axis.set_ylim(0, 1); axis.yaxis.set_major_formatter(PercentFormatter(1.0))
     figure.tight_layout(); st.pyplot(figure); plt.close(figure)
 
 
-def _single_chart(summary, column, title, ylabel, percent=False):
+def _single_chart(summary, column, title, ylabel, percent=False, require_positive=False):
     values = summary[["method", column]].dropna()
-    if values.empty:
-        st.info(f"{title}: N/A for the current records.")
+    if not has_valid_metric(values,[column],require_positive):
+        st.info(EMPTY_METRIC_MESSAGES.get(column,f"{title}: no valid data are available."))
         return
-    figure, axis = plt.subplots(figsize=(9, 3.8))
-    axis.bar(values["method"], values[column], label=title)
-    axis.set_xlabel("Proposal method"); axis.set_ylabel(ylabel); axis.set_title(title); axis.legend()
+    figure, axis = plt.subplots(figsize=(8, chart_height(len(values))))
+    labels=[METHOD_DISPLAY_NAMES.get(value,value) for value in values["method"]]
+    bars=axis.bar(labels, values[column])
+    axis.set_xlabel("Proposal method"); axis.set_ylabel(ylabel); axis.set_title(title)
     axis.tick_params(axis="x", rotation=18)
     if percent:
         axis.set_ylim(0, 1); axis.yaxis.set_major_formatter(PercentFormatter(1.0))
+    _label_bars(axis,bars,percent)
     figure.tight_layout(); st.pyplot(figure); plt.close(figure)
+
+
+def chart_height(method_count:int)->float:
+    if method_count<=1:return 2.6
+    if method_count<=4:return 3.8
+    return 4.8
+
+
+def has_valid_metric(frame:pd.DataFrame,columns:list[str],require_positive=False)->bool:
+    if frame.empty or not all(column in frame for column in columns):return False
+    values=frame[columns].apply(pd.to_numeric,errors="coerce")
+    if values.dropna(how="all").empty:return False
+    return bool((values>0).any().any()) if require_positive else True
+
+
+def _label_bars(axis,bars,percent=False):
+    for bar in bars:
+        value=bar.get_height()
+        if np.isnan(value):continue
+        label=f"{value:.0%}" if percent else f"{value:.2f}"
+        axis.text(bar.get_x()+bar.get_width()/2,value,label,ha="center",va="bottom",fontsize=8)
 
 
 def _display_na(frame: pd.DataFrame):
@@ -335,7 +398,7 @@ def _render_legacy_migration(store: ExperimentStore, legacy_path: Path) -> None:
         return
     legacy = pd.DataFrame([rows[index] for index in legacy_indices])
     st.warning(f"Detected {len(legacy)} legacy rows. Historical files are not changed automatically.")
-    selection = st.dataframe(legacy, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="legacy_record_selection")
+    selection = st.dataframe(legacy, width="stretch", on_select="rerun", selection_mode="multi-row", key="legacy_record_selection")
     selected_positions = list(selection.selection.rows)
     selected_indices = [legacy_indices[position] for position in selected_positions]
     st.button("Keep legacy records unchanged", help="No migration or deletion is performed.")
