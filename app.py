@@ -14,16 +14,11 @@ from PIL import Image
 from config import DEFAULT_LABEL_CLASSES, OUTPUT_DIR, PROJECT_SUBTITLE, PROJECT_TITLE, REPORT_DIR, UPLOAD_DIR
 from dataset_export import export_dataset
 from evaluation import evaluate_method, evaluation_tables
-from experiment_tracking import (
-    build_experiment_records,
-    experiment_tables,
-    load_experiment_records,
-    save_experiment_records,
-)
 from feature_extraction import extract_feature_maps, save_feature_maps
 from labeling import build_annotation
 from preprocess import apply_preprocessing
 from region_proposal import AblationConfig, _components, correct_region_mask, create_region_crops, propose_regions
+from research_evaluation import render_research_evaluation
 from report import generate_pdf_report
 from yolo_inference import run_yolo_inference
 
@@ -463,73 +458,15 @@ def main() -> None:
         st.info("SAM/SAM2 integration is future-ready: use proposed boxes as prompts, then replace rectangular masks with refined masks.")
 
     if active_page == "Research Evaluation":
-        st.subheader("Research Evaluation")
-        experiment_cols = st.columns(2)
-        experiment_id = experiment_cols[0].text_input("Experiment ID", value=st.session_state.experiment_id)
-        reviewer_id = experiment_cols[1].text_input("Reviewer ID", value=st.session_state.reviewer_id)
-        image_outcome = st.radio(
-            "Image-level reviewer outcome",
-            ["uncertain", "anomaly present", "no anomaly"],
-            horizontal=True,
+        render_research_evaluation(
+            output_dir=OUTPUT_DIR,
+            image_name=st.session_state.image_name,
+            annotations=st.session_state.annotations,
+            proposal_result=st.session_state.proposal_result,
+            feature_maps=st.session_state.feature_maps,
+            review_start_time=st.session_state.review_start_time,
+            review_completion_time=st.session_state.review_completion_time,
         )
-        if st.session_state.review_start_time:
-            timing_cols = st.columns(2)
-            timing_cols[0].text_input("Review started", st.session_state.review_start_time, disabled=True)
-            timing_cols[1].text_input("Review completed", st.session_state.review_completion_time or "Not completed", disabled=True)
-
-        csv_path = OUTPUT_DIR / "research_experiment_results.csv"
-        json_path = OUTPUT_DIR / "research_experiment_results.json"
-        if st.button("Record Research Evaluation", type="primary"):
-            if st.session_state.proposal_result is None:
-                st.error("Analyze an image before recording an experiment.")
-            elif not st.session_state.annotations or not st.session_state.review_completion_time:
-                st.error("Save review metadata before recording an experiment.")
-            else:
-                try:
-                    records = build_experiment_records(
-                        experiment_id=experiment_id,
-                        reviewer_id=reviewer_id,
-                        image_filename=st.session_state.image_name,
-                        image_outcome=image_outcome,
-                        review_start_time=st.session_state.review_start_time,
-                        review_completion_time=st.session_state.review_completion_time,
-                        annotations=st.session_state.annotations,
-                        proposal_result=st.session_state.proposal_result,
-                        feature_maps=st.session_state.feature_maps,
-                    )
-                    save_experiment_records(records, csv_path, json_path)
-                    st.session_state.experiment_id = experiment_id
-                    st.session_state.reviewer_id = reviewer_id
-                    st.success("Recorded four proposal-method experiment rows.")
-                except ValueError as error:
-                    st.error(str(error))
-
-        stored_records = load_experiment_records(json_path)
-        if stored_records:
-            image_table, summary_table = experiment_tables(stored_records)
-            st.caption("Image-level experiment records")
-            st.dataframe(image_table, use_container_width=True)
-            st.caption("Dataset-level method summary")
-            st.dataframe(summary_table, use_container_width=True)
-            recall_columns = [
-                "top_1_proposal_recall", "top_3_proposal_recall",
-                "top_5_proposal_recall", "top_8_proposal_recall",
-            ]
-            st.bar_chart(summary_table.set_index("method")[recall_columns])
-            efficiency_columns = [
-                "mean_accepted_proposals_per_image", "mean_false_proposals_per_image",
-                "mean_proposals_reviewed_before_first_useful",
-            ]
-            st.bar_chart(summary_table.set_index("method")[efficiency_columns])
-            export_cols = st.columns(2)
-            export_cols[0].download_button(
-                "Download Experiment CSV", csv_path.read_bytes(), csv_path.name, "text/csv",
-            )
-            export_cols[1].download_button(
-                "Download Experiment JSON", json_path.read_bytes(), json_path.name, "application/json",
-            )
-        else:
-            st.info("Complete a review and record an experiment to populate the research tables.")
 
 
 if __name__ == "__main__":

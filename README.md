@@ -94,6 +94,7 @@ These are candidate labels for dataset creation, not trained predictions.
 ├── dataset_export.py
 ├── evaluation.py
 ├── experiment_tracking.py
+├── research_evaluation.py
 ├── synthetic_benchmark.py
 ├── yolo_inference.py
 ├── report.py
@@ -178,6 +179,10 @@ The Region Proposals tab reports four definitions: contour-only (Canny contours)
 
 The **Research Evaluation** tab measures whether ranked proposals reduce reviewer effort. Review timing starts when image analysis completes and stops when review metadata is saved. Each record includes experiment ID, reviewer ID, image, method, final proposal count, accept/reject/uncertain counts, image-level outcome, timestamps, duration, first useful rank, and Top-1/3/5/8 indicators.
 
+Method-level records are stored persistently in `outputs/research_evaluation.sqlite3`. Each row has a UUID `record_id` and is unique by experiment ID, experiment version, reviewer ID, image filename, and method. Duplicate previews can be cancelled, overwritten deliberately, or saved as a new experiment version. New records default to `Development / Test`; final dashboards exclude development records unless **Include development records** is enabled.
+
+Only the refined contextual method reviewed in **Human Review / Labeling** receives accepted, rejected, and uncertain counts. Baselines use `review_status = not_reviewed`, null decision counts, and `not_reviewed = final_proposals`. A not-reviewed proposal is never treated as rejected or false. Review status is one of `fully_reviewed`, `partially_reviewed`, or `not_reviewed`.
+
 An accepted reviewed region is treated as a reference true-anomaly proposal for the experiment. For a method with ranked proposals `p_1 ... p_K`, a reference is found at rank `k` when `IoU(p_k, reference) >= 0.10`. Top-K proposal recall is:
 
 ```text
@@ -187,6 +192,8 @@ Top-K recall = anomaly-present images with first useful rank <= K
 ```
 
 Images marked `no anomaly` or `uncertain` are excluded from the Top-K recall denominator. They remain in proposal-burden and timing summaries.
+
+Final quantitative recall also excludes records with `ground_truth_status = unknown` unless the reviewer explicitly enables the caution-labelled recall override. Undefined recall, acceptance, review-time, and first-useful metrics are displayed as N/A rather than zero. Annotation acceptance is `accepted / (accepted + rejected)` and excludes uncertain and not-reviewed proposals. False proposals per image are explicitly rejected proposals from manually reviewed methods only.
 
 Dataset-level annotation-efficiency metrics include mean accepted proposals per image, mean false/rejected proposals per image, annotation acceptance rate, mean review time, and mean proposals reviewed before the first useful region. Results compare contour-only, fixed-threshold, raw multi-scale fused, and refined contextual methods and can be exported as CSV or JSON.
 
@@ -202,6 +209,12 @@ Recommended procedure:
 8. Export CSV/JSON and compare Top-K recall together with review time and false-proposal burden.
 
 The baseline rankings use mean anomaly-heatmap evidence and are capped at eight proposals, matching the default refined-method review budget. This is an annotation-efficiency experiment, not a clinical or structural-safety validation.
+
+### Manage Experiments
+
+The Research Evaluation page supports filtering by experiment, reviewer, image, method, status, and date range. Selected or filtered records can be exported as CSV or JSON before deletion. Confirmation is required to delete selected rows, one experiment, one image, all development records, all records, or reset the SQLite store. Every deletion reports the row count and affected experiment IDs, then recomputes summaries and charts.
+
+The **Legacy Record Migration** section detects historical JSON rows missing `record_id`, `review_status`, `not_reviewed`, or `experiment_status`. Reviewers may keep them unchanged, explicitly migrate selected rows into SQLite with corrected baseline semantics, or confirm deletion from the legacy JSON. Historical records are never changed silently.
 
 ## Ablation Design
 
