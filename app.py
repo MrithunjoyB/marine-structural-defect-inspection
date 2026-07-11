@@ -62,12 +62,33 @@ def init_state() -> None:
         "review_completion_time": None,
         "experiment_id": f"EXP-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         "reviewer_id": "",
+        "active_page": "Overview",
+        "review_widget_values": {},
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
 
+def persist_review_value(key: str) -> None:
+    """Copy widget state into storage that survives conditional page rendering."""
+    if key in st.session_state:
+        st.session_state.review_widget_values[key] = st.session_state[key]
+
+
+def review_default(key: str, default):
+    return st.session_state.review_widget_values.get(key, default)
+
+
+def clear_review_state() -> None:
+    prefixes=("decision_","label_","custom_label_","notes_","mask_choice_","morph_","small_","invert_","x1_","y1_","x2_","y2_")
+    for key in list(st.session_state):
+        if key.startswith(prefixes):
+            del st.session_state[key]
+    st.session_state.review_widget_values={}
+
+
 def run_analysis(uploaded_file, settings: dict[str, int | bool]) -> None:
+    clear_review_state()
     image_path = save_upload(uploaded_file)
     raw = load_cv_image(image_path)
     processed = apply_preprocessing(
@@ -177,21 +198,26 @@ def main() -> None:
             with st.spinner("Extracting features and proposing candidate regions..."):
                 run_analysis(uploaded_files[0], settings)
 
-    tabs = st.tabs(
-        [
-            "Overview",
-            "Image Analysis",
-            "Feature Maps",
-            "Region Proposals",
-            "Human Review / Labeling",
-            "Dataset Export",
-            "Report Generation",
-            "Future Model Training",
-            "Research Evaluation",
-        ]
+    pages = (
+        "Overview",
+        "Image Analysis",
+        "Feature Maps",
+        "Region Proposals",
+        "Human Review / Labeling",
+        "Dataset Export",
+        "Report Generation",
+        "Future Model Training",
+        "Research Evaluation",
+    )
+    active_page = st.radio(
+        "Workspace page",
+        pages,
+        key="active_page",
+        horizontal=True,
+        label_visibility="collapsed",
     )
 
-    with tabs[0]:
+    if active_page == "Overview":
         st.subheader("Purpose")
         st.write(
             "StructVision-AI analyzes structural, product, component, or surface images before labeled data exists. "
@@ -204,7 +230,7 @@ def main() -> None:
         )
         st.info("Before a trained model is present, all regions are candidate proposals, not certified defect predictions.")
 
-    with tabs[1]:
+    if active_page == "Image Analysis":
         st.subheader("Image Analysis")
         if st.session_state.image_path is None:
             st.info("Upload and analyze an image from the sidebar.")
@@ -220,7 +246,7 @@ def main() -> None:
                 st.image(yolo.annotated_path.as_posix(), caption="Trained YOLO predictions", use_container_width=True)
                 st.dataframe(pd.DataFrame([pred.to_row() for pred in yolo.predictions]), use_container_width=True)
 
-    with tabs[2]:
+    if active_page == "Feature Maps":
         st.subheader("Feature Maps")
         if st.session_state.feature_maps is None:
             st.info("Run analysis to generate feature maps.")
@@ -235,7 +261,7 @@ def main() -> None:
                     else:
                         col.image(fmap, channels="BGR", use_container_width=True)
 
-    with tabs[3]:
+    if active_page == "Region Proposals":
         st.subheader("Region Proposals")
         proposal_result = st.session_state.proposal_result
         if proposal_result is None:
@@ -292,7 +318,7 @@ def main() -> None:
                 mime="image/png",
             )
 
-    with tabs[4]:
+    if active_page == "Human Review / Labeling":
         st.subheader("Human Review / Labeling")
         proposal_result = st.session_state.proposal_result
         if proposal_result is None:
@@ -314,23 +340,43 @@ def main() -> None:
                         "colour_difference": round(proposal.color_variation_score, 3), "gradient_strength": round(proposal.gradient_strength, 3),
                         "entropy": round(proposal.entropy, 3), "mask_stability": round(proposal.mask_stability, 3),
                     })
-                    decision = st.radio("Review decision",["uncertain","accept","reject"],horizontal=True,key=f"decision_{proposal.region_id}")
-                    label = st.selectbox("Candidate label", DEFAULT_LABEL_CLASSES, key=f"label_{proposal.region_id}")
-                    custom = st.text_input("Optional custom label", key=f"custom_{proposal.region_id}")
-                    notes = st.text_area("Notes", key=f"notes_{proposal.region_id}", height=70)
+                    decision_key=f"decision_{proposal.region_id}"
+                    decision_options=["uncertain","accept","reject"]
+                    decision_default=review_default(decision_key,"uncertain")
+                    decision = st.radio("Review decision",decision_options,index=decision_options.index(decision_default),horizontal=True,
+                        key=decision_key,on_change=persist_review_value,args=(decision_key,))
+                    label_key=f"label_{proposal.region_id}"
+                    label_default=review_default(label_key,"unassigned")
+                    label = st.selectbox("Candidate label",DEFAULT_LABEL_CLASSES,index=DEFAULT_LABEL_CLASSES.index(label_default),
+                        key=label_key,on_change=persist_review_value,args=(label_key,))
+                    custom_key=f"custom_label_{proposal.region_id}"
+                    custom = st.text_input("Optional custom label",value=review_default(custom_key,""),key=custom_key,
+                        on_change=persist_review_value,args=(custom_key,))
+                    notes_key=f"notes_{proposal.region_id}"
+                    notes = st.text_area("Notes",value=review_default(notes_key,""),key=notes_key,height=70,
+                        on_change=persist_review_value,args=(notes_key,))
                     st.caption("Manual mask correction")
                     x1,y1,x2,y2=proposal.bbox; bbox_cols=st.columns(4)
-                    corrected_bbox=(
-                        int(bbox_cols[0].number_input("x1",0,st.session_state.processed.shape[1]-1,x1,key=f"x1_{proposal.region_id}")),
-                        int(bbox_cols[1].number_input("y1",0,st.session_state.processed.shape[0]-1,y1,key=f"y1_{proposal.region_id}")),
-                        int(bbox_cols[2].number_input("x2",1,st.session_state.processed.shape[1],x2,key=f"x2_{proposal.region_id}")),
-                        int(bbox_cols[3].number_input("y2",1,st.session_state.processed.shape[0],y2,key=f"y2_{proposal.region_id}")),
-                    )
+                    bbox_keys=[f"x1_{proposal.region_id}",f"y1_{proposal.region_id}",f"x2_{proposal.region_id}",f"y2_{proposal.region_id}"]
+                    bbox_defaults=[x1,y1,x2,y2]; bbox_limits=[(0,st.session_state.processed.shape[1]-1),(0,st.session_state.processed.shape[0]-1),(1,st.session_state.processed.shape[1]),(1,st.session_state.processed.shape[0])]
+                    bbox_values=[]
+                    for col,caption,key,default,limits in zip(bbox_cols,["x1","y1","x2","y2"],bbox_keys,bbox_defaults,bbox_limits):
+                        bbox_values.append(int(col.number_input(caption,limits[0],limits[1],int(review_default(key,default)),key=key,
+                            on_change=persist_review_value,args=(key,))))
+                    corrected_bbox=tuple(bbox_values)
                     correction_cols=st.columns(4)
-                    mask_source=correction_cols[0].selectbox("Mask source",["refined","raw"],key=f"source_{proposal.region_id}")
-                    morphology=correction_cols[1].slider("Erode / dilate",-4,4,0,key=f"morph_{proposal.region_id}")
-                    remove_small=correction_cols[2].number_input("Remove below",0,5000,0,25,key=f"small_{proposal.region_id}")
-                    invert=correction_cols[3].checkbox("Invert",False,key=f"invert_{proposal.region_id}")
+                    mask_key=f"mask_choice_{proposal.region_id}"; mask_options=["refined","raw"]
+                    mask_source=correction_cols[0].selectbox("Mask source",mask_options,index=mask_options.index(review_default(mask_key,"refined")),key=mask_key,
+                        on_change=persist_review_value,args=(mask_key,))
+                    morph_key=f"morph_{proposal.region_id}"
+                    morphology=correction_cols[1].slider("Erode / dilate",-4,4,int(review_default(morph_key,0)),key=morph_key,
+                        on_change=persist_review_value,args=(morph_key,))
+                    small_key=f"small_{proposal.region_id}"
+                    remove_small=correction_cols[2].number_input("Remove below",0,5000,int(review_default(small_key,0)),25,key=small_key,
+                        on_change=persist_review_value,args=(small_key,))
+                    invert_key=f"invert_{proposal.region_id}"
+                    invert=correction_cols[3].checkbox("Invert",bool(review_default(invert_key,False)),key=invert_key,
+                        on_change=persist_review_value,args=(invert_key,))
                     corrected_path,corrected_metrics=correct_region_mask(proposal,corrected_bbox,mask_source,morphology,int(remove_small),invert,st.session_state.image_path.stem)
                     st.image(corrected_path.as_posix(),caption="Corrected annotation mask",clamp=True)
                     st.json(corrected_metrics)
@@ -343,7 +389,7 @@ def main() -> None:
                 st.session_state.review_completion_time = datetime.now().isoformat(timespec="seconds")
                 st.success(f"Saved {len(annotations)} reviewed region records in session state.")
 
-    with tabs[5]:
+    if active_page == "Dataset Export":
         st.subheader("Dataset Export")
         if st.session_state.image_path is None:
             st.info("Analyze and review an image before exporting.")
@@ -388,7 +434,7 @@ def main() -> None:
                 st.dataframe(per_image,use_container_width=True); st.dataframe(dataset,use_container_width=True)
                 st.download_button("Download Evaluation CSV",per_image.to_csv(index=False).encode(),"proposal_evaluation.csv","text/csv")
 
-    with tabs[6]:
+    if active_page == "Report Generation":
         st.subheader("Report Generation")
         if st.session_state.proposal_result is None:
             st.info("Run analysis before generating a report.")
@@ -406,7 +452,7 @@ def main() -> None:
                 st.success(f"Report generated: {report_path.name}")
                 st.download_button("Download Report", report_path.read_bytes(), file_name=report_path.name, mime="application/pdf")
 
-    with tabs[7]:
+    if active_page == "Future Model Training":
         st.subheader("Future Model Training")
         st.write(
             "After reviewing and exporting enough labeled candidate regions, train YOLO detection or segmentation with Ultralytics. "
@@ -416,7 +462,7 @@ def main() -> None:
         st.code("python train.py --data datasets/data.yaml --task segment --model yolo11n-seg.pt --epochs 80 --imgsz 640", language="bash")
         st.info("SAM/SAM2 integration is future-ready: use proposed boxes as prompts, then replace rectangular masks with refined masks.")
 
-    with tabs[8]:
+    if active_page == "Research Evaluation":
         st.subheader("Research Evaluation")
         experiment_cols = st.columns(2)
         experiment_id = experiment_cols[0].text_input("Experiment ID", value=st.session_state.experiment_id)
