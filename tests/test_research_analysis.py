@@ -7,7 +7,7 @@ import pandas as pd
 
 from ablation_study import ABLATION_CONFIGS,CONFIG_BY_ID,configuration_snapshot,contribution_table,validate_comparison
 from region_proposal import AblationConfig
-from research_analysis import bootstrap_ci,category_summary,filter_results,filtered_csv,filtered_json,paired_advanced,paired_bootstrap,positive_negative_summary,win_tie_loss
+from research_analysis import PairingIntegrityError,bootstrap_ci,bootstrap_input_audit,category_summary,failure_galleries,filter_results,filtered_csv,filtered_json,paired_advanced,paired_bootstrap,positive_negative_summary,scope_audit,select_analysis_scope,win_tie_loss
 
 
 def rows():
@@ -39,7 +39,19 @@ class CategoryAndPairTests(unittest.TestCase):
         self.assertEqual(len(positive_negative_summary(self.frame)),8)
     def test_pairing_differences_and_outcomes(self):
         paired=paired_advanced(self.frame); self.assertEqual(len(paired),4); self.assertTrue(paired.difference_processing_time_seconds.notna().all()); counts=win_tie_loss(paired); self.assertEqual(counts["images"],4); self.assertEqual(win_tie_loss(paired,"thin_crack")["images"],1)
+        self.assertEqual(counts["contextual_wins"]+counts["fused_wins"]+counts["ties"]+counts["incomparable"],len(paired)); self.assertTrue((paired.outcome_label=="equal").all())
     def test_missing_category(self):self.assertFalse("future_category" in set(category_summary(self.frame).category))
+    def test_scope_and_version_isolation(self):
+        mixed=pd.concat([self.frame,self.frame.assign(experiment_id="OTHER",experiment_version=2)],ignore_index=True); scoped=select_analysis_scope(mixed,"SYN-BALANCED-001",1,"synthetic-controlled","1.0","test"); self.assertEqual(len(scoped),16); self.assertEqual(scope_audit(scoped)["unique_images"],4)
+        filtered=filter_results(mixed,search="OTHER"); self.assertEqual(len(scoped),16); self.assertEqual(len(filtered),16)
+    def test_strict_pairing_duplicate_unmatched_and_filename_collision(self):
+        duplicate=pd.concat([self.frame,self.frame.iloc[[0]]],ignore_index=True)
+        with self.assertRaises(PairingIntegrityError):paired_advanced(duplicate)
+        unmatched=self.frame[~((self.frame.image_id=="i1")&(self.frame.method=="refined contextual method"))]
+        with self.assertRaises(PairingIntegrityError):paired_advanced(unmatched)
+        collision=self.frame.copy(); collision.loc[collision.image_id=="i2","image_filename"]="thin_crack_01.png"; self.assertEqual(len(paired_advanced(collision)),4)
+    def test_bootstrap_exact_keys_positive_recall_and_galleries(self):
+        paired=paired_advanced(self.frame); precision=bootstrap_input_audit(paired,"proposal_precision"); recall=bootstrap_input_audit(paired,"proposal_recall"); self.assertEqual(precision["eligible_paired_images"],4); self.assertEqual(recall["eligible_paired_images"],2); self.assertEqual(len(recall["paired_keys"]),2); self.assertEqual(sum(len(value) for value in failure_galleries(paired).values()),4)
 
 
 class AblationAndStatisticsTests(unittest.TestCase):

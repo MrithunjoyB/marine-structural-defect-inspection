@@ -8,10 +8,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import streamlit as st
+import matplotlib.pyplot as plt
 
 from ablation_study import ABLATION_CONFIGS,CONFIG_BY_ID,ablation_leaderboard,contribution_table,execute_ablation_plan,save_ablation_plan
 from registered_experiment import load_ground_truth,load_plan,selected_images
-from research_analysis import bootstrap_ci,category_summary,enrich_results,filter_results,filtered_csv,filtered_json,interpretation,paired_advanced,paired_bootstrap,positive_negative_summary,win_tie_loss
+from research_analysis import PairingIntegrityError,bootstrap_input_audit,category_summary,enrich_results,failure_galleries,filter_results,filtered_csv,filtered_json,interpretation,paired_advanced,paired_bootstrap,positive_negative_summary,scope_audit,select_analysis_scope,win_tie_loss
 
 
 ESSENTIAL=["experiment_id","experiment_version","image_filename","anomaly_type","image_outcome","method","run_status"]
@@ -64,10 +65,22 @@ def render_research_analysis(store,registry):
     if selected_image:
         candidates=frame[frame.image_filename==selected_image]; experiments=sorted(candidates.experiment_id.unique()); default=experiments.index(selected_experiment) if selected_experiment in experiments else 0; comparison_experiment=st.selectbox("Image comparison experiment",experiments,index=default,key="result_image_comparison_experiment"); comparison=candidates[candidates.experiment_id==comparison_experiment]; st.markdown("##### Selected-image Method Comparison"); st.dataframe(comparison[[c for c in ESSENTIAL+METRICS if c in comparison]],width="stretch",hide_index=True)
     _result_details(filtered,registry)
-    _category_evaluation(filtered)
-    _paired_evaluation(filtered)
-    _statistical_reporting(filtered)
-    _ablation_study(store,registry,frame)
+    analysis,audit=_scientific_scope(frame,filtered)
+    _category_evaluation(analysis)
+    try: paired=paired_advanced(analysis)
+    except PairingIntegrityError as error: st.error(f"Paired-analysis integrity error: {error}"); paired=pd.DataFrame()
+    _consistency_check(analysis,paired,audit)
+    _paired_evaluation(paired)
+    _statistical_reporting(paired)
+    _ablation_study(store,registry,analysis,audit)
+
+
+def _scientific_scope(frame,filtered):
+    st.markdown("### Scientific Analysis Scope")
+    experiments=sorted(frame.experiment_id.unique()); default=experiments.index("SYN-BALANCED-001") if "SYN-BALANCED-001" in experiments else 0; experiment=st.selectbox("Scientific Experiment ID",experiments,index=default,key="science_experiment_id"); versions=sorted(frame[frame.experiment_id==experiment].experiment_version.unique()); version=st.selectbox("Scientific Experiment version",versions,key="science_experiment_version"); candidate=frame[(frame.experiment_id==experiment)&(frame.experiment_version==version)]
+    datasets=sorted(candidate.dataset_id.dropna().unique()); dataset=st.selectbox("Scientific Dataset ID",datasets,key="science_dataset_id"); dataset_versions=sorted(candidate[candidate.dataset_id==dataset].dataset_version.dropna().unique()); dataset_version=st.selectbox("Scientific Dataset version",dataset_versions,key="science_dataset_version"); splits=sorted(candidate.dataset_split.dropna().unique()); split=st.selectbox("Scientific Dataset split",splits,key="science_dataset_split"); mode=st.radio("Analysis mode",["Analyse selected experiment","Analyse currently filtered result rows"],key="science_analysis_mode")
+    analysis=select_analysis_scope(frame,experiment,version,dataset,dataset_version,split) if mode=="Analyse selected experiment" else filtered.copy(); audit=scope_audit(analysis)
+    st.markdown("##### Analysis-scope audit"); st.json(audit); return analysis,audit
 
 
 def _reset_filters():
@@ -96,40 +109,50 @@ def _category_evaluation(frame):
     for data,column,title in charts:
         valid=data[["category","method",column]].dropna() if not data.empty else data
         if valid.empty: st.info(f"{title}: N/A for the current filtered rows.")
-        else: st.markdown(f"##### {title}"); st.bar_chart(valid,x="category",y=column,color="method",width="stretch")
+        else: st.markdown(f"##### {title}"); _grouped_method_chart(data,column,title,percent=column in {"top_1_proposal_recall","proposal_precision","proposal_recall"},unit_interval=column=="mean_iou")
 
 
-def _paired_evaluation(frame):
+def _paired_evaluation(paired):
     st.markdown("### Multi-scale Fused vs Refined Contextual")
-    paired=paired_advanced(frame)
     if paired.empty: st.info("No identical-image advanced-method pairs are available."); return
-    st.dataframe(paired,width="stretch",hide_index=True); st.json({"complete_balanced_test":win_tie_loss(paired),"thin_cracks":win_tie_loss(paired,"thin_crack"),"pitting_clusters":win_tie_loss(paired,"pitting_cluster"),"clean_normal_texture":win_tie_loss(paired,"normal_texture"),"specular_highlights":win_tie_loss(paired,"specular_highlights"),"all_anomaly_present":win_tie_loss(paired,outcome="anomaly_present"),"all_clean":win_tie_loss(paired,outcome="no_anomaly")}); st.info(interpretation(paired))
+    st.caption("Composite rule: detection and false-alarm metrics determine win/loss; localisation-only or speed-only changes remain an overall tie. Tolerance epsilon = 1e-9. Metric-specific outcomes are shown separately.")
+    st.dataframe(paired,width="stretch",hide_index=True); summaries={"complete_balanced_test":win_tie_loss(paired),"thin_cracks":win_tie_loss(paired,"thin_crack"),"pitting_clusters":win_tie_loss(paired,"pitting_cluster"),"clean_normal_texture":win_tie_loss(paired,"normal_texture"),"specular_highlights":win_tie_loss(paired,"specular_highlights"),"all_anomaly_present":win_tie_loss(paired,outcome="anomaly_present"),"all_clean":win_tie_loss(paired,outcome="no_anomaly")}; st.json(summaries); st.info(interpretation(paired))
     difference_columns=[column for column in paired if column.startswith("difference_") and any(key in column for key in ("precision","recall","iou","false_positive","processing_time","first_true"))]
     for column in difference_columns:
         valid=paired[["image_filename",column]].dropna()
-        if not valid.empty: st.bar_chart(valid,x="image_filename",y=column,width="stretch")
-    st.markdown("##### Failure-case galleries"); gallery=paired.assign(case=np.select([paired.difference_false_positive_proposals.lt(0),paired.difference_false_positive_proposals.gt(0),paired.outcome_label.eq("equal")],["contextual beats fused","fused beats contextual","ties"],default="other")); st.dataframe(gallery[["image_filename","anomaly_type","image_outcome","case","outcome_label"]],width="stretch",hide_index=True)
+        if not valid.empty: _difference_chart(valid,column)
+    st.markdown("##### Failure-case galleries")
+    for name,gallery in failure_galleries(paired).items():
+        with st.expander(name.title()):
+            if gallery.empty:st.info("No cases in this selected scientific scope.")
+            else:
+                columns=["experiment_id","experiment_version","image_id","image_filename","anomaly_type","image_outcome","fused_proposal_precision","contextual_proposal_precision","fused_proposal_recall","contextual_proposal_recall","fused_mean_iou","contextual_mean_iou","fused_false_positive_proposals","contextual_false_positive_proposals","outcome_reason"]; st.dataframe(gallery[columns],width="stretch",hide_index=True)
 
 
-def _statistical_reporting(frame):
+def _statistical_reporting(paired):
     st.warning("Results are preliminary and based on a controlled synthetic benchmark. They do not establish real-world marine inspection performance.")
-    samples=int(st.number_input("Bootstrap samples",100,10000,1000,100,key="bootstrap_samples")); seed=int(st.number_input("Bootstrap seed",0,1000000,42,key="bootstrap_seed")); paired=paired_advanced(frame)
+    samples=int(st.number_input("Bootstrap samples",100,10000,1000,100,key="bootstrap_samples")); seed=int(st.number_input("Bootstrap seed",0,1000000,42,key="bootstrap_seed"))
     rows=[]
     for metric in ("proposal_precision","proposal_recall","false_positive_proposals","mean_iou"):
-        low,high=paired_bootstrap(paired,metric,samples,seed); rows.append({"paired_difference_metric":metric,"images":int(paired[f"difference_{metric}"].notna().sum()) if f"difference_{metric}" in paired else 0,"ci_low":low,"ci_high":high})
+        audit=bootstrap_input_audit(paired,metric) if not paired.empty else {"eligible_paired_images":0,"excluded_paired_images":0,"exclusion_reason":"No strict pairs"}; low,high=paired_bootstrap(paired,metric,samples,seed) if not paired.empty else (np.nan,np.nan); rows.append({"paired_difference_metric":metric,**{key:value for key,value in audit.items() if key!="paired_keys"},"bootstrap_samples":samples,"bootstrap_seed":seed,"ci_low":low,"ci_high":high})
     st.markdown("##### Paired bootstrap confidence intervals"); st.dataframe(_na_table(pd.DataFrame(rows)),width="stretch",hide_index=True)
     if len(paired)<10: st.info("Sample size is too small for significance claims; intervals are descriptive only.")
 
 
-def _ablation_study(store,registry,frame):
+def _ablation_study(store,registry,frame,audit):
     st.markdown("### Ablation Study")
-    with registry.connect() as con: plans=[dict(row) for row in con.execute("SELECT plan_id,experiment_id FROM experiment_plans ORDER BY created_timestamp DESC")]
+    plan_ids=frame.plan_id.dropna().unique().tolist();
+    with registry.connect() as con: plans=[dict(row) for row in con.execute(f"SELECT plan_id,experiment_id FROM experiment_plans WHERE plan_id IN ({','.join('?' for _ in plan_ids)}) ORDER BY created_timestamp DESC",plan_ids)] if plan_ids else []
+    if not plans:st.error("No reproducible source plan exists for the selected scientific scope."); return
     plan_id=st.selectbox("Ablation source experiment",[row["plan_id"] for row in plans],format_func=lambda value:next(row["experiment_id"] for row in plans if row["plan_id"]==value),key="ablation_source_plan"); plan=load_plan(registry,plan_id)
     selected_ids=st.multiselect("Selected ablation configurations",[item.configuration_id for item in ABLATION_CONFIGS],default=["ABL-FULL"],format_func=lambda value:CONFIG_BY_ID[value].name,key="ablation_configurations"); experiment_id=st.text_input("Ablation experiment ID",value=f"ABL-{plan['experiment_id']}"); version=int(st.number_input("Ablation experiment version",1,1000,1)); reviewer=st.text_input("Ablation reviewer"); seed=int(st.number_input("Ablation seed",0,1000000,int(plan["configuration"].get("random_seed",42)))); criteria=st.columns(2); iou=float(criteria[0].number_input("Ablation IoU threshold",0.,1.,.1,.01)); overlap=float(criteria[1].number_input("Ablation overlap threshold",0.,1.,.25,.01))
     manifest_hash=plan["manifest_hash"]; definitions=[CONFIG_BY_ID[value] for value in selected_ids]; path=registry.root/"exports"/f"{experiment_id}_ablation_plan.json"
+    source=frame[frame.plan_id==plan_id]; source_audit=scope_audit(source); reproducible=set(plan["selected_image_ids"])==set(source.image_id.unique()); valid=source_audit["duplicate_image_method_rows"]==0 and source.experiment_id.nunique()==1 and source.experiment_version.nunique()==1 and source.dataset_id.nunique()==1 and source.dataset_version.nunique()==1 and source.dataset_split.nunique()==1 and reproducible
+    st.json({"source_experiment_id":source_audit["selected_experiment_id"],"source_experiment_version":source_audit["selected_experiment_version"],"source_rows":len(source),"unique_images":source.image_id.nunique(),"category_counts":source.drop_duplicates("image_id").anomaly_type.value_counts().to_dict(),"expected_configurations":len(definitions),"expected_total_execution_pairs":source.image_id.nunique()*len(definitions),"selected_image_manifest_reproducible":reproducible,"scope_valid":valid})
     if st.button("Preview Ablation Plan"):
         payload=save_ablation_plan(path,plan,definitions,experiment_id,version,reviewer,seed,{"iou":iou,"mask_overlap":overlap},manifest_hash); st.json(payload)
-    if st.button("Execute Ablation Study",disabled=not definitions):
+    if not valid:st.error("Ablation execution blocked: source scope is duplicated, mixed, mismatched, or cannot reproduce the selected-image manifest.")
+    if st.button("Execute Ablation Study",disabled=not definitions or not valid):
         save_ablation_plan(path,plan,definitions,experiment_id,version,reviewer,seed,{"iou":iou,"mask_overlap":overlap},manifest_hash); results=execute_ablation_plan(registry,store,plan_id,definitions,version,iou,overlap,experiment_id=experiment_id); st.success(f"Stored {len(results)} ablation result rows."); st.rerun()
     all_results=store.dataframe(); ablation=all_results[all_results.method.isin([item.configuration_id for item in ABLATION_CONFIGS])]
     if not ablation.empty:
@@ -140,3 +163,26 @@ def _ablation_study(store,registry,frame):
 
 def _na_table(frame):
     return frame.apply(lambda column:column.map(lambda value:"N/A" if pd.isna(value) else str(value)))
+
+
+def _grouped_method_chart(frame,column,title,percent=False,unit_interval=False):
+    data=frame[["category","method",column,"images"]].dropna(); categories=sorted(data.category.unique()); methods=sorted(data.method.unique()); x=np.arange(len(categories)); width=.8/max(len(methods),1); fig,axis=plt.subplots(figsize=(9,max(3,2.4+len(categories)*.25)))
+    for index,method in enumerate(methods):
+        subset=data[data.method==method].set_index("category"); values=[subset[column].get(category,np.nan) for category in categories]; bars=axis.bar(x+(index-(len(methods)-1)/2)*width,values,width,label=method)
+        for bar,category,value in zip(bars,categories,values):
+            if pd.notna(value): count=int(subset["images"].get(category,0)); axis.text(bar.get_x()+bar.get_width()/2,bar.get_height(),f"{value:.2f}\nn={count}",ha="center",va="bottom",fontsize=7)
+    axis.set_xticks(x,categories,rotation=18,ha="right"); axis.set_title(title); axis.set_ylabel(column.replace("_"," ").title()); axis.axhline(0,color="black",linewidth=.6); axis.legend(fontsize=7)
+    if percent or unit_interval:axis.set_ylim(0,1.05)
+    fig.tight_layout(); st.pyplot(fig); plt.close(fig)
+
+
+def _difference_chart(valid,column):
+    fig,axis=plt.subplots(figsize=(9,max(3,len(valid)*.28))); axis.bar(valid.image_filename,valid[column],color=np.where(valid[column]>=0,"#2a9d8f","#e76f51")); axis.axhline(0,color="black",linewidth=1); axis.tick_params(axis="x",rotation=35); axis.set_title(column.replace("difference_","").replace("_"," ").title()); axis.set_ylabel("Contextual minus fused"); fig.tight_layout(); st.pyplot(fig); plt.close(fig); st.caption("Positive value = contextual higher; negative value = fused higher. For false proposals and processing time, lower may be better.")
+
+
+def _consistency_check(frame,paired,audit):
+    if paired.empty:return
+    scoped=frame.drop_duplicates("image_id").anomaly_type.value_counts().to_dict(); paired_counts=paired.anomaly_type.value_counts().to_dict(); issues=[]
+    if scoped!=paired_counts:issues.append(f"category counts differ: scope={scoped}, paired={paired_counts}")
+    if audit["unique_images"]!=len(paired):issues.append(f"unique-image count differs: scope={audit['unique_images']}, paired={len(paired)}")
+    if issues:st.warning("Scientific-analysis consistency warning: "+"; ".join(issues))
