@@ -1,439 +1,228 @@
 # StructVision-AI
 
-**Foundation-Model-Assisted Visual Inspection and Dataset Generation for Structural Surface Anomalies**
+**Human-in-the-Loop Visual Anomaly Proposal, Dataset Construction, and Reproducible Evaluation for Structural Surface Inspection**
 
-StructVision-AI is a computer vision prototype for analyzing structural, component, product, and surface images before labeled training data is available. Instead of pretending to be a trained defect classifier, it uses classical feature extraction and visual anomaly region proposal to help a human reviewer build a labeled dataset for future YOLO or segmentation-model training.
+StructVision-AI is a research-oriented computer-vision framework for generating, ranking, reviewing, and evaluating visual anomaly proposals when task-specific labelled data are limited or unavailable. It integrates classical and contextual feature analysis, multi-scale proposal generation, segmentation-ready masks, human-in-the-loop annotation, registered dataset intake, leakage-safe splitting, reproducible batch experimentation, baseline comparison, category-wise analysis, bootstrap confidence intervals, configurable ablation studies, and optional downstream YOLO integration. The current system is an anomaly-proposal and dataset-construction environment; it is not a finished defect classifier or an engineering diagnostic system.
 
-## Problem Definition
+## Abstract
 
-The research problem is proposal generation under weak prior knowledge: identify compact, reviewable surface regions that differ from their local structural context without claiming a defect class. Visual saliency and anomaly detection are not equivalent. A weld bead, plate boundary, or repeating texture may be highly salient but normal; an anomaly must differ statistically from an appropriate surrounding context.
+Visual inspection research frequently begins before representative labelled data, reliable class definitions, or trained domain models are available. StructVision-AI investigates proposal generation in this setting: candidate regions are extracted from classical image evidence, evaluated across spatial scales, compared with their local context, refined into binary masks, and ranked for review. The framework separates anomaly evidence from mask reliability, supports manual annotation and automatic matching against registered ground truth, and records dataset provenance, split assignments, code state, configurations, and evaluation outputs. Current evidence is derived from a controlled 33-image synthetic benchmark containing anomaly-present and clean artefact conditions. Experiments compare contour, fixed-threshold, multi-scale fused, and refined contextual methods, with category-wise, paired, bootstrap, and ablation analyses. These experiments establish reproducible behaviour on the controlled benchmark only. Validation on licensed, expert-reviewed structural and marine imagery remains future work.
 
-The system remains suitable for Ocean Engineering, Naval Architecture, industrial inspection, and surface quality workflows, while staying general enough for many component or material images.
+## Research Motivation
 
-## Why This Is Not Just a YOLO Detector
+Visual saliency, anomaly proposal, trained defect classification, and verified engineering diagnosis are distinct tasks. A bright reflection, weld edge, plate boundary, or repeating texture may be visually salient without representing damage. An anomaly proposal indicates that a region differs from its image context; a trained classifier estimates a learned category; an engineering diagnosis additionally requires validated sensing, domain expertise, and appropriate standards.
 
-Most beginner projects start and end with a detector. StructVision-AI is built around the earlier and more important stage: creating useful training data and inspection evidence when no domain-specific model exists yet.
+The central research question is:
 
-Current stage:
+> How can visually meaningful candidate regions be proposed and ranked under limited labels while reducing annotation burden and preserving reproducible evaluation?
 
-```text
-raw image
-→ preprocessing
-→ feature extraction
-→ visual anomaly candidate proposal
-→ segmentation-ready mask output
-→ region quantification
-→ visual priority scoring
-→ human review and candidate labeling
-→ dataset export
-→ report generation
+The framework therefore emphasises transparent candidate evidence, segmentation-ready outputs, controlled reviewer decisions, and explicit experiment scope. It avoids assigning certified defect labels to pre-training proposals.
+
+## System Overview
+
+```mermaid
+flowchart LR
+    A[Raw image or registered dataset] --> B[Preprocessing]
+    B --> C[Feature extraction]
+    C --> D[Multi-scale proposal generation]
+    D --> E[Contextual scoring and mask refinement]
+    E --> F[Human review or automatic ground-truth matching]
+    F --> G[Dataset export]
+    F --> H[Reproducible evaluation]
+    G --> I[Optional supervised training]
 ```
 
-Future stage:
+The Streamlit application exposes the proposal, review, dataset, and evaluation workflows through persistent navigation. Registered experiments can execute without manual image upload, and automatic results remain separate from manually reviewed records.
 
-```text
-reviewed dataset
-→ YOLO detection or segmentation training
-→ optional SAM/SAM2 mask refinement
-→ trained inference comparison
-→ improved inspection reporting
-```
+## Methodology
 
-## Current Capabilities
+The proposal pipeline combines grayscale intensity, Canny edges, Sobel gradients, Laplacian response, local texture variation, local binary-pattern deviation, entropy-related evidence, foreground thresholding, and Lab-colour deviation. Overlapping patches at several spatial scales produce a dense anomaly field. Candidate components are filtered for area and border artefacts, split when internal heatmap evidence is incoherent, merged when spatially and visually compatible, and subjected to overlap suppression.
 
-- Streamlit tab-based UI with Overview, Image Analysis, Feature Maps, Region Proposals, Human Review, Dataset Export, Report Generation, and Future Model Training.
-- Single-image and batch-image upload UI. The first selected image is analyzed; video upload is recognized as a future-ready input path.
-- Preprocessing: resizing, denoising, CLAHE contrast enhancement, sharpening, grayscale conversion, and brightness/contrast adjustment.
-- Feature maps: grayscale, Canny, Sobel, Laplacian, local variance, local binary pattern (LBP), Lab color deviation, foreground threshold, contours, and a continuous fused anomaly heatmap.
-- Overlapping patch scoring at three spatial scales using edge density, gradient, Laplacian response, texture variance, Lab deviation, entropy, and local contrast difference.
-- Adaptive percentile thresholds, morphological processing, connected components, similarity-aware region merging, overlap suppression, and configurable relative-area filtering.
-- Per-region stability under brightness, contrast, Gaussian-noise, and resize perturbations.
-- Per-region measurements and explanations, padded review crops, mask/heatmap crops, automatic diagnostics, and baseline comparison overlays.
-- Segmentation-ready binary masks saved to `outputs/masks/`.
-- Human-in-the-loop review with accept/reject, candidate label assignment, custom label entry, and reviewer notes.
-- Dataset export to YOLO bounding-box text, YOLO-style segmentation polygon text, JSON annotations, CSV summary, copied images, and masks.
-- Optional trained YOLO inference if `models/best.pt` exists, shown separately from classical proposals.
-- Professional PDF report with preprocessing settings, feature thumbnails, region proposal overlay, region table, review labels, limitations, and future training note.
+Each surviving region is compared with a surrounding context ring. The comparison informs local texture, colour, entropy, gradient, and internal-to-boundary edge evidence. Mask refinement removes isolated pixels, fills only small holes, smooths boundaries, retains coherent connected content, and recomputes the bounding box from the final mask.
 
-## Neutral Candidate Labels
+The ranking architecture separates three scores. For evidence terms \(e_i\), reliability terms \(r_j\), and non-negative weights:
 
-Before a trained model is available, the app uses neutral terms such as:
+$$
+E = 100\frac{\sum_i w_i e_i}{\sum_i w_i}, \qquad
+R = 100\frac{\sum_j v_j r_j}{\sum_j v_j},
+$$
 
-- visual anomaly candidate
-- extracted region
-- texture discontinuity
-- edge concentration
-- color variation region
-- surface irregularity candidate
+$$
+P = 100\frac{u_E(E/100)+u_R(R/100)+u_A A+u_N N}{u_E+u_R+u_A+u_N}.
+$$
 
-Default human-review labels:
+Here \(E\) is contextual anomaly evidence, \(R\) is mask reliability, \(A\) is area relevance, \(N\) is novelty, and \(P\) is review priority. Reliability does not independently establish anomalous content. Border suppression, coherence checks, merging, and non-maximum suppression reduce common proposal artefacts before top-\(K\) selection.
 
-- `corrosion_candidate`
-- `crack_candidate`
-- `coating_damage_candidate`
-- `weld_irregularity_candidate`
-- `pitting_candidate`
-- `dent_candidate`
-- `scratch_candidate`
-- `other_surface_anomaly`
-- `ignore`
+Implementation stages, feature definitions, and ablation controls are documented in [Methodology](docs/methodology.md).
 
-These are candidate labels for dataset creation, not trained predictions.
+## Research Contributions
 
-## Folder Structure
+The framework provides:
+
+- a pre-training anomaly-proposal workflow that does not require a trained task-specific detector;
+- explicit separation of anomaly evidence, mask reliability, and review priority;
+- contextual and multi-scale candidate ranking with segmentation-ready masks;
+- human review, candidate labelling, mask correction, and annotation export;
+- registered dataset intake with provenance, licensing, hashing, duplicate checks, and leakage-safe group allocation;
+- reproducible experiment plans containing manifest hashes, selected images, code commits, package versions, configurations, and seeds;
+- automatic ground-truth matching with Top-\(K\), precision, recall, localisation, false-proposal, and timing metrics;
+- category-wise analysis of anomaly categories and clean artefact robustness;
+- strict paired method comparison with deterministic bootstrap intervals; and
+- a configurable ablation framework that preserves the default proposal method.
+
+These are engineering and research capabilities of the repository, not claims of state-of-the-art performance.
+
+## Experimental Protocol
+
+Dataset versions are registered before final evaluation. Exact image duplicates are excluded, while near-duplicate, source, and template groups remain within one split. The controlled benchmark uses deterministic group-aware allocation with seed 42. An experiment plan freezes the dataset version, split, selected image IDs, proposal methods, matching thresholds, seed, and configuration snapshot. Execution then produces one persistent automatic row per image-method pair.
+
+Automatic ground-truth matching uses mask IoU, ground-truth overlap, and a centroid fallback for thin anomalies. Positive-image Top-\(K\) recall is defined when at least one of the first \(K\) ranked proposals matches verified ground truth. Clean images do not enter recall denominators; their proposals are evaluated as false positives. Scientific analyses require one explicit experiment ID and version, strict image-ID pairing, and consistent dataset scope.
+
+See [Experiments](docs/experiments.md) and [Evaluation Metrics](docs/evaluation-metrics.md) for execution, resume, export, denominator, and confidence-interval details.
+
+## Current Experimental Evidence
+
+**These results are preliminary and are based on a small controlled synthetic benchmark. They do not establish real-world marine or structural inspection performance.**
+
+The registered `synthetic-controlled` v1.0 dataset contains 33 generated images with exact masks. Its leakage-safe balanced split contains 15 training, 6 validation, and 12 test images. The test set comprises three thin-crack, three pitting-cluster, three normal-texture, and three specular-highlight images: six anomaly-present and six clean/no-anomaly cases. Recorded duplicate, near-duplicate, and group leakage checks are zero.
+
+### Baseline Comparison
+
+The following values are read from `SYN-BALANCED-001` version 1 (12 images; 48 stored rows). Top-\(K\) columns use six eligible anomaly-present images. Times are approximate per-image means on the recorded execution environment.
+
+| Method | Top-1 / 3 / 5 / 8 recall | Precision | Proposal recall | False proposals/image | Mean time (s) |
+|---|---:|---:|---:|---:|---:|
+| Contour-only baseline | 0.8333 / 0.8333 / 0.8333 / 0.8333 | 0.4167 | 0.8333 | 0.75 | 0.4101 |
+| Fixed-threshold baseline | 1.0000 / 1.0000 / 1.0000 / 1.0000 | 0.3715 | 0.9667 | 3.25 | 0.0731 |
+| Multi-scale fused | 1.0000 / 1.0000 / 1.0000 / 1.0000 | 0.5000 | 0.7944 | 0.75 | 0.0078 |
+| Refined contextual | 1.0000 / 1.0000 / 1.0000 / 1.0000 | 0.5000 | 0.7944 | 0.75 | 0.0081 |
+
+Strict paired analysis finds the multi-scale fused and refined contextual methods tied on detection-level outcomes for all 12 test images. Refined contextual processing improves mean and best localisation IoU on eligible anomaly images, while proposal precision, proposal recall, first-hit rank, proposal count, and false-proposal count remain unchanged. Bootstrap intervals are descriptive because only 12 paired images, including 6 recall-eligible positives, are available.
+
+### Ablation Evidence
+
+`ABL-SYN-BALANCED-001` version 1 contains 120 completed rows: 12 images evaluated under 10 configurations. Under the repository's documented balanced score, `ABL-RERANK-ONLY` is the strongest current configuration. Its aggregate proposal recall is 0.8500 compared with 0.7944 for `ABL-FULL`; the observed difference is concentrated in pitting-cluster recall (0.7000 versus 0.5889). Thin-crack recall remains 1.0000. Normal-texture false proposals remain zero, while specular-highlight false alarms remain unresolved at three proposals per image. This controlled result does not establish that reranking-only is generally superior.
+
+| Configuration | Main observation |
+|---|---|
+| `ABL-FULL` | Reference refined configuration; recall 0.7944 and 0.75 false proposals/image. |
+| `ABL-RERANK-ONLY` | Highest current balanced score; improved pitting recall with unchanged thin-crack recall. |
+| `ABL-NO-TEXTURE` | Aggregate detection metrics match `ABL-FULL` on this benchmark. |
+| `ABL-NO-COLOUR` | Aggregate detection metrics match `ABL-FULL` on this benchmark. |
+| `ABL-NO-ENTROPY` | Aggregate detection metrics match `ABL-FULL` on this benchmark. |
+| Other recorded removals | Border, stability, boundary-edge, coherence, and fused-only variants share the same aggregate detection metrics here; timing differs. |
+
+Full tables are available in [Controlled Benchmark Results](docs/results/controlled-benchmark.md) and [Ablation Study Results](docs/results/ablation-study.md).
+
+## Interface and Experimental Outputs
+
+The repository does not currently include a complete, publication-ready interface figure set. Future documentation may add licensed or generated figures for the system overview, feature maps, proposal masks, dataset dashboard, paired comparison, ablation leaderboard, and representative success and failure cases.
+
+<!-- Add reviewed figures from docs/images/ only after provenance and redistribution checks. -->
+
+## Repository Structure
 
 ```text
 .
-├── app.py
-├── config.py
-├── preprocess.py
-├── feature_extraction.py
-├── region_proposal.py
-├── scoring.py
-├── labeling.py
-├── dataset_export.py
-├── evaluation.py
-├── experiment_tracking.py
-├── research_evaluation.py
-├── research_dataset.py
-├── dataset_intake.py
-├── synthetic_benchmark.py
-├── yolo_inference.py
-├── report.py
-├── train.py
-├── data.yaml
-├── requirements.txt
-├── README.md
-├── models/
-│   └── README.md
-├── sample_images/
-│   └── README.md
-├── uploads/
-│   └── .gitkeep
-├── outputs/
-│   ├── .gitkeep
-│   ├── feature_maps/
-│   │   └── .gitkeep
-│   └── masks/
-│       └── .gitkeep
-├── reports/
-│   └── .gitkeep
-└── datasets/
-    ├── images/
-    │   └── .gitkeep
-    ├── labels/
-    │   └── .gitkeep
-    └── masks/
-        └── .gitkeep
+├── app.py, preprocess.py, feature_extraction.py      # application and image processing
+├── region_proposal.py, scoring.py                    # proposal and ranking pipeline
+├── dataset_intake.py, research_dataset.py            # dataset registration and splitting
+├── registered_experiment.py, experiment_tracking.py  # execution and persistence
+├── research_evaluation.py, research_analysis*.py     # evaluation and scientific analysis
+├── ablation_study.py, synthetic_benchmark.py         # controlled studies
+├── dataset_export.py, train.py, yolo_inference.py     # export and learning integration
+├── tests/                                             # regression and research-semantics tests
+└── docs/                                              # methodology, protocols, and results
 ```
 
-Legacy modules from the earlier prototype may remain for backward compatibility, but the main architecture is the StructVision-AI module set above.
-
-## Contextual Region-Proposal Methodology
-
-The proposal engine keeps feature evidence separate long enough to avoid dependence on one contour mask. It creates independent percentile masks for Canny edges, Sobel magnitude, Laplacian response, local intensity variance, LBP deviation, Lab color difference, foreground segmentation, and the fused heatmap. Overlapping tiles are evaluated at approximately 8%, 16%, and 28% of the shorter image dimension. Their normalized measurements are projected back to a dense patch-score map.
-
-The dense feature and tile evidence is thresholded by image-specific percentiles. Three morphological scales preserve small spots, elongated lines, and broad irregular regions. Connected components are filtered by relative area and border/specular evidence, then merged using bounding-box IoU, center distance, morphological connectivity, and texture/color similarity. Large low-coherence masks are split from internal heatmap peaks. Every surviving region is compared with a dilated context ring using local texture, Lab colour, entropy, gradient, and internal-versus-boundary edge contrasts.
-
-The candidate lifecycle is explicit and monotonic where required:
-
-```text
-raw components
-→ area and border filtering
-→ coherence splitting and mask refinement
-→ overlap/nesting merge
-→ non-maximum overlap suppression
-→ contextual ranking sanity filters
-→ top-K selection (default: 8)
-```
-
-Diagnostics report every stage separately. Runtime assertions enforce that merging cannot increase the split count, the final count cannot exceed top-K, every final mask is non-empty, and every exported proposal box is derived from its final refined mask. The optional debug panel shows stage overlays, rejection reasons, and counts removed by area, border, and overlap rules.
-
-### Three-Score Architecture
-
-Anomaly evidence is deliberately separate from segmentation reliability:
-
-```text
-E = 100 * (w_t ΔT + w_c ΔC + w_h ΔH + w_e E_i + w_g ΔG + w_q Q_g) / Σw_E
-R = 100 * (v_s S_p + v_c C_n + v_b B_s + v_a A_s + v_q Q_s) / Σv_R
-P = 100 * (u_e E/100 + u_r R/100 + u_a A_r + u_n N) / Σu_P
-```
-
-`ΔT`, `ΔC`, `ΔH`, and `ΔG` are candidate-to-context differences; `E_i` is internal edge concentration and `Q_g` is geometric irregularity. Reliability uses perturbation stability `S_p`, connectedness `C_n`, boundary smoothness `B_s`, scale agreement `A_s`, and segmentation coherence `Q_s`. Priority combines evidence, reliability, area relevance `A_r`, and contextual novelty `N`. Candidate features are robustly calibrated by median/IQR with clipping. Configurable defaults live in `scoring.py`; stability cannot directly dominate anomaly evidence.
-
-### Border Suppression And Mask Refinement
-
-The valid-image model detects black/near-uniform letterbox bands and applies a configurable exclusion margin. Boundary occupancy produces a border penalty, while thin frame-parallel regions are suppressed. Genuine edge-touching regions can remain when their internal evidence is coherent.
-
-Raw masks are refined with bilateral heatmap filtering, adaptive/local percentile thresholds, opening/closing, hole filling, and small-component removal. Reports include area reduction, scale agreement, coherence, fragmentation, solidity-derived smoothness, raw masks, refined masks, and context rings. Reviewers can adjust boxes, select raw/refined masks, erode or dilate, remove small components, and invert a bounded mask before saving the corrected reference.
-
-Final proposal masks retain the dominant connected component, fill only small enclosed holes, smooth short boundary irregularities, and recompute their bounding boxes after cleanup. Broad regions with low internal heatmap coherence are split or rejected. Strong containment and overlap suppression prevents nested duplicates from reaching the final ranking.
-
-## Baseline Comparison
-
-The Region Proposals tab reports four definitions: contour-only (Canny contours), fixed-threshold (`heatmap > 128`), raw multi-scale fused masks, and refined contextual multi-scale masks. It also displays component counts, adaptive threshold, score distributions, evidence/reliability/priority scores, feature contributions, border penalty, and coherence.
-
-## Proposal Evaluation
-
-`evaluation.py` treats accepted, intentionally labelled, manually corrected regions as references. Per-image and dataset tables include recall at IoU 0.10/0.25/0.50, average best IoU, mask Dice/IoU, false and accepted proposals per image, acceptance rate, area over/under-coverage, correction count, and estimated review time. CSV export is available in Dataset Export.
-
-## Annotation-Efficiency Experiment Protocol
-
-The **Research Evaluation** tab measures whether ranked proposals reduce reviewer effort. Review timing starts when image analysis completes and stops when review metadata is saved. Each record includes experiment ID, reviewer ID, image, method, final proposal count, accept/reject/uncertain counts, image-level outcome, timestamps, duration, first useful rank, and Top-1/3/5/8 indicators.
-
-Method-level records are stored persistently in `outputs/research_evaluation.sqlite3`. Each row has a UUID `record_id` and is unique by experiment ID, experiment version, reviewer ID, image filename, and method. Duplicate previews can be cancelled, overwritten deliberately, or saved as a new experiment version. New records default to `Development / Test`; final dashboards exclude development records unless **Include development records** is enabled.
-
-Only the refined contextual method reviewed in **Human Review / Labeling** receives accepted, rejected, and uncertain counts. Baselines use `review_status = not_reviewed`, null decision counts, and `not_reviewed = final_proposals`. A not-reviewed proposal is never treated as rejected or false. Review status is one of `fully_reviewed`, `partially_reviewed`, or `not_reviewed`.
-
-An accepted reviewed region is treated as a reference true-anomaly proposal for the experiment. For a method with ranked proposals `p_1 ... p_K`, a reference is found at rank `k` when `IoU(p_k, reference) >= 0.10`. Top-K proposal recall is:
-
-```text
-Top-K recall = anomaly-present images with first useful rank <= K
-               -------------------------------------------------
-                         all anomaly-present images
-```
-
-Images marked `no anomaly` or `uncertain` are excluded from the Top-K recall denominator. They remain in proposal-burden and timing summaries.
-
-Final quantitative recall also excludes records with `ground_truth_status = unknown` unless the reviewer explicitly enables the caution-labelled recall override. Undefined recall, acceptance, review-time, and first-useful metrics are displayed as N/A rather than zero. Annotation acceptance is `accepted / (accepted + rejected)` and excludes uncertain and not-reviewed proposals. False proposals per image are explicitly rejected proposals from manually reviewed methods only.
-
-Dataset-level annotation-efficiency metrics include mean accepted proposals per image, mean false/rejected proposals per image, annotation acceptance rate, mean review time, and mean proposals reviewed before the first useful region. Results compare contour-only, fixed-threshold, raw multi-scale fused, and refined contextual methods and can be exported as CSV or JSON.
-
-Recommended procedure:
-
-1. Choose a stable experiment ID for one protocol/configuration and a consistent reviewer ID.
-2. Analyze one image without inspecting baseline comparison results first.
-3. Review proposals in rank order and mark each accept, reject, or uncertain.
-4. Save review metadata to close the timer.
-5. Set the image outcome to anomaly present, no anomaly, or uncertain.
-6. Record the Research Evaluation row set.
-7. Repeat across the dataset and reviewers without changing proposal parameters mid-experiment.
-8. Export CSV/JSON and compare Top-K recall together with review time and false-proposal burden.
-
-The baseline rankings use mean anomaly-heatmap evidence and are capped at eight proposals, matching the default refined-method review budget. This is an annotation-efficiency experiment, not a clinical or structural-safety validation.
-
-### Manage Experiments
-
-The Research Evaluation page supports filtering by experiment, reviewer, image, method, status, and date range. Selected or filtered records can be exported as CSV or JSON before deletion. Confirmation is required to delete selected rows, one experiment, one image, all development records, all records, or reset the SQLite store. Every deletion reports the row count and affected experiment IDs, then recomputes summaries and charts.
-
-The **Legacy Record Migration** section detects historical JSON rows missing `record_id`, `review_status`, `not_reviewed`, or `experiment_status`. Reviewers may keep them unchanged, explicitly migrate selected rows into SQLite with corrected baseline semantics, or confirm deletion from the legacy JSON. Historical records are never changed silently.
-
-## Research Dataset Intake
-
-The **Research Dataset Intake** page registers and validates real inspection data before an experiment. It supports one image, image batches, ZIP archives, optional annotations, controlled synthetic generation, reference-ground-truth review, deterministic split preparation, validation exports, and dataset manifest export.
-
-Required registration captures dataset ID/name/version, source type and reference, provider, licence and usage permissions, citation, acquisition date, domain, ground-truth quality, annotation format, and notes. Supported annotation formats are YOLO boxes, YOLO segmentation, COCO JSON, Pascal VOC, binary masks, CSV regions, and custom formats. The current automated bounds checks cover normalized YOLO coordinates, non-empty masks, and duplicate COCO annotation IDs; other formats remain visible for explicit validation and review.
-
-**Do not commit professor-provided, private, restricted, or unlicensed images to the public GitHub repository.**
-
-Professor-provided data should be registered as `professor-provided`, stored only through the ignored `research_data/raw/` runtime area, assigned its supplied licence/restrictions, and used in Development/Test mode until provenance and ground truth permit final evaluation. Unknown or restricted licences are blocked from public research export unless a reviewer records an explicit warning override.
-
-### Research Data Structure
-
-```text
-research_data/
-├── registry/
-│   ├── datasets.sqlite          # ignored runtime registry
-│   ├── dataset_manifest.json    # ignored generated manifest
-│   └── schema.json              # Git-tracked schema
-├── raw/<dataset_id>/
-├── processed/<dataset_id>/
-├── annotations/<dataset_id>/
-├── splits/<dataset_id>/
-├── reports/<dataset_id>/
-└── exports/
-```
-
-Runtime datasets, SQLite files, annotations, reports, split manifests, exports, and image formats are ignored by Git. Only documentation, schemas, templates, and deliberately reviewed small synthetic assets may be tracked.
-
-### Manifest And Validation
-
-Every image receives an immutable image ID plus dataset ID, original/stored names, SHA-256, dimensions, channels, format, byte size, source, licence, ground-truth status, annotation path, split, exact/near-duplicate status, corruption status, import timestamp, and notes. SHA-256 detects renamed exact duplicates; perceptual hashes flag possible near duplicates.
-
-Validation reports include total/valid/corrupt files, exact and possible near duplicates, annotation coverage, class and size distributions, missing annotations, and invalid annotations. Reports are downloadable as CSV and JSON.
-
-### Splits And Leakage
-
-The default split requests 70/15/15 with a deterministic seed, but allocation is group-aware and stratified by anomaly type, positive/clean outcome, and clean artefact subtype. Exact duplicates are excluded; near-duplicate, source, and template groups remain indivisible. Finalization previews image/outcome/category/group composition and blocks leakage or a test set without positive, negative, and category diversity unless an explicit warning override is recorded.
-
-**Balanced Synthetic Benchmark** uses constrained allocation for the 33-image controlled dataset. With seed 42 it produces 15 train, 6 validation, and 12 test images: test contains `thin_crack`, `pitting_cluster`, `normal_texture`, and `specular_highlights` template groups. The larger-than-15% test split is intentional so representative positive and clean categories remain present without splitting related templates.
-
-### Experiment Reproducibility
-
-Research Evaluation can create an experiment from a registered dataset/version/split with subset size, reviewer, methods, status, parameters, and random seed. The saved JSON records the manifest hash, selected image IDs, preprocessing/proposal/weight/threshold settings, border margin, maximum regions, ablations, Git commit, Python and package versions, operating system, and creation time.
-
-Creating a plan freezes selection and configuration but does not analyze images. Use **Execute Registered Dataset Experiment** to batch-run the selected contour-only, fixed-threshold, multi-scale fused, and refined contextual methods without a sidebar upload. Execution calls the existing feature extraction and proposal pipeline directly, loads registered exact masks, and saves one automatic row for every image-method pair.
-
-Automatic matching accepts a proposal when it reaches the configured bounding-mask IoU or ground-truth overlap threshold. A centroid-inside-ground-truth fallback supports very thin anomalies. Top-K proposal recall counts a positive image as a hit when at least one of its first K ranked proposals matches a verified anomaly. Proposal precision is matched proposals divided by all proposals; proposal recall is matched ground-truth instances divided by all ground-truth instances; false proposals are unmatched final proposals. Clean images are excluded from positive Top-K denominators, and every proposal on a clean image is false.
-
-Automatic rows use `review_status = automatically_evaluated` and remain separate from human-review records. Executions move through planned, running, completed, partially completed, failed, or cancelled states. Resume skips completed image-method pairs, retry targets failed pairs, overwrite explicitly replaces completed pairs, and create-new-version preserves prior runs. Results, configuration, selected manifest, and method summaries are downloadable as CSV or JSON; **Open Selected Test Image** displays the original, exact mask, matched/unmatched proposals, ranks, and IoU values.
-
-Experiment plans may select anomaly-present images, clean images, specific anomaly or clean artefact types, or a balanced positive/negative subset. Clean-only runs are labeled **False-positive robustness evaluation**; precision and false-proposal metrics remain valid, while recall is explicitly undefined and empty recall charts are suppressed.
-
-### Research Analysis Browser
-
-Manage Experiments provides persistent free-text search, categorical and numeric filters, quick comparisons, sorting, column presets, selected-image method comparison, expandable visual evidence, and filtered CSV/JSON exports. Filters use stable Streamlit session keys and remain active across reruns and page navigation. Category-wise Evaluation separates anomaly recall from clean false-alarm robustness and never substitutes zero for undefined recall.
-
-**Multi-scale Fused vs Refined Contextual** pairs methods on identical experiment images, reports per-image metric differences and category-specific win/tie/loss counts, and generates a conservative interpretation. Deterministic bootstrap intervals are descriptive; the interface warns that controlled synthetic results do not establish real-world marine inspection performance.
-
-### Ablation Study
-
-The ablation framework defines stable IDs for the full refined method and removals of texture, colour, entropy, stability, boundary-edge, border, coherence, contextual reranking, multi-scale fusion, and mask refinement components. Configurations are thin `AblationConfig` overlays on the existing proposal pipeline. The full configuration equals the normal default exactly, so existing experiments and proposal behavior are unchanged.
-
-Each ablation snapshot records enabled components, thresholds, weights, seed, code commit, dataset manifest hash, experiment identity, selected images, and matching thresholds. Comparisons require aligned manifests, images, splits, thresholds, and seeds. Leaderboard and contribution tables describe empirical benchmark differences rather than causal effects.
-
-Development/Test experiments may use local development images and unknown ground truth and remain excluded from final summaries by default. Final Research Evaluation requires a registered dataset, verified or reviewer-estimated ground truth, source/licence metadata, and a configuration snapshot; unknown provenance or licence is blocked unless explicitly overridden with a warning.
-
-### Synthetic Intake
-
-The controlled generator creates balanced thin cracks, elongated weld disturbances, pitting clusters, colour-only and texture-only anomalies, clean texture, illumination gradients, border artefacts, specular highlights, blur, and Gaussian noise. A deterministic master seed derives a unique seed for every image; geometry, intensity, orientation, texture, background, and noise vary per sample. Each image is registered with an exact mask and complete generation parameters. Generation asserts that image-file SHA-256 values are unique unless duplication is explicitly requested.
-
-Image SHA-256 is computed only from encoded image-file bytes. Annotation hashes, metadata, and filenames do not determine image duplicates. The intake dashboard reports exact image duplicates, near duplicates, duplicate groups, unique images, and split-eligible images separately. Exact duplicates are excluded by default; perceptually similar and same-template synthetic variants remain available but are forced into one split to prevent leakage.
-
-### Dataset Management And Deletion
-
-Use **Manage Research Datasets** to preview and delete one registered version, every version of a Dataset ID, generated files, synthetic datasets, or the Development/Test store. Metadata-only deletion removes registry and manifest records while preserving owned files. Generated-files-only deletion preserves registration and raw data but removes processed outputs, splits, and reports. Complete deletion removes registry records and moves all dataset-owned files to `research_data/.trash/<timestamp>/<dataset_id>/` first.
-
-Every destructive operation requires a confirmation checkbox, the exact Dataset ID, and a final delete button. Cleanup previews list files, bytes, database rows, manifests, splits, and linked experiment IDs. Linked experiments block complete deletion by default; development experiments may be explicitly unlinked or cascade deleted, while final research experiments are never silently deleted or unlinked.
-
-Trash audit records preserve the reviewer, timestamp, mode, moved files, and removed records. Use **Restore deleted dataset** to restore files and metadata, or explicitly confirm **Permanently empty dataset trash**. Synthetic data can be cleared and regenerated with replacement or a new version. Streamlit cache clearing does not delete registered datasets or their files.
-
-## Ablation Design
-
-The sidebar can disable edge, texture, colour, entropy, stability, contextual contrast, multi-scale fusion, region merging, or mask refinement. Each run appends its switches and diagnostics to `outputs/ablation_results.csv`, enabling controlled comparisons without changing the export contract.
-
-## Synthetic Benchmark
-
-`synthetic_benchmark.py` generates known masks for cracks, weld disturbances, pitting clusters, colour-only and texture-only anomalies, normal texture, illumination gradients, black borders, specular highlights, and noise/blur. It evaluates all four proposal methods automatically:
+## Installation
 
 ```bash
-python -m unittest discover -s tests -p 'test_*.py' -v
-python synthetic_benchmark.py
-```
-
-## Setup
-
-```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
+python3 -m streamlit run app.py
 ```
 
-## Run
+Run the test suite with:
 
 ```bash
-streamlit run app.py
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The app works even when:
+## Reproducing the Controlled Benchmark
 
-- no trained YOLO model exists
-- SAM/SAM2 is not installed
-- no labeled dataset exists
+Reproduction requires the registered dataset version, manifest hash, selected image IDs, split seed, experiment ID/version, code commit, matching thresholds, configuration snapshots, and environment metadata. An experiment plan records this identity but does not run the methods. Experiment execution reads the plan and writes persistent image-method result rows; CSV and JSON exports provide analysis-ready copies without replacing the database record.
 
-The default working mode is classical CV feature extraction, anomaly region proposal, human review, and dataset export.
+The current controlled protocol uses `synthetic-controlled` v1.0, balanced split seed 42, and `SYN-BALANCED-001` version 1. Generated data and runtime databases are intentionally ignored by Git. Detailed steps are in [Experiments](docs/experiments.md).
 
-## Annotation And Export Workflow
+## Using External or Professor-Provided Data
 
-1. Upload one or more images in the sidebar.
-2. Tune preprocessing and proposal filters.
-3. Click **Analyze Selected Image**.
-4. Inspect feature maps and region proposals.
-5. Open **Human Review / Labeling**.
-6. Accept or reject candidate regions.
-7. Assign candidate labels or custom labels.
-8. Save review metadata.
-9. Export dataset files from **Dataset Export**.
+**Do not commit professor-provided, private, restricted, or unlicensed images to the public repository.**
 
-Exported dataset structure:
-
-```text
-datasets/
-├── images/
-├── labels/
-├── masks/
-├── annotations.json
-├── dataset_summary.csv
-└── data.yaml
-```
-
-## YOLO Training Workflow
-
-After enough reviewed annotations are exported:
-
-```bash
-python train.py --data datasets/data.yaml --task detect --model yolo11n.pt --epochs 80 --imgsz 640
-```
-
-For segmentation-style training:
-
-```bash
-python train.py --data datasets/data.yaml --task segment --model yolo11n-seg.pt --epochs 80 --imgsz 640
-```
-
-The script copies the best trained checkpoint to:
-
-```text
-models/best.pt
-```
-
-When that file exists, the Streamlit app enables trained YOLO inference and displays those predictions separately from classical region proposals.
-
-## SAM/SAM2 Future Integration
-
-SAM or SAM2 can be added later by using proposed bounding boxes as prompts and replacing rectangular or contour masks with refined segmentation masks. The current app does not require SAM and will not fail if SAM is absent.
-
-## Report Generation
-
-The PDF report includes:
-
-- project title
-- image filename
-- analysis timestamp
-- preprocessing settings
-- feature map thumbnails
-- highlighted region proposal image
-- region summary table
-- visual anomaly priority scores
-- accepted/rejected review labels when available
-- limitations
-- future model training note
-
-## Demo Screenshot Placeholders
-
-Add screenshots here after running the app:
-
-```text
-docs/screenshots/overview.png
-docs/screenshots/feature_maps.png
-docs/screenshots/region_proposals.png
-docs/screenshots/dataset_export.png
-```
+Register such data through Research Dataset Intake, preserve source and licence metadata, and leave redistribution disabled unless permission is explicit. Raw files, annotations, reports, and registries belong in ignored runtime directories. Final quantitative evaluation should use verified or reviewer-estimated ground truth with clearly recorded provenance. See [Dataset Management](docs/dataset-management.md).
 
 ## Limitations
 
-- Classical CV proposals identify visually significant candidate regions, not certified defects.
-- Region quality depends on lighting, viewpoint, texture, surface cleanliness, and filter settings.
-- Percentile thresholds are image-relative, so a uniformly damaged image or a frame with no normal background can still be ambiguous.
-- Perturbation stability measures repeatability of classical saliency, not physical defect persistence.
-- Synthetic tests exercise geometry and nuisance conditions but do not replace evaluation on reviewed field imagery.
-- Context rings can contain another anomaly or cross a material boundary, biasing local contrast.
-- Heatmap-peak splitting is heuristic and may divide one heterogeneous defect or retain a weak bridge.
-- Review-time estimates require multiple reliable timestamps and do not measure reviewer cognitive effort.
-- YOLO inference requires a trained `models/best.pt`.
-- Segmentation polygon export currently uses bounding-box polygons unless refined masks are added later.
-- Video frame extraction is a planned extension, not an automatic processing path in the current app.
+**Methodological limitations.** Classical and contextual proposals identify image irregularities; they do not provide certified diagnosis. Context rings may cross structural boundaries, and matching thresholds affect measured performance. Specular highlights remain a major false-positive mode, while pitting recall remains incomplete.
 
-## Future Roadmap
+**Benchmark limitations.** The controlled benchmark is small and synthetic. Only four categories occur in the balanced test split, and descriptive confidence intervals cannot support broad significance claims.
 
-- Add video frame extraction and frame sampling.
-- Add SAM/SAM2 prompt-based mask refinement.
-- Add active-learning loops for repeated review and retraining.
-- Add multi-image batch processing and dataset merge tools.
-- Add physical scale calibration for area estimates.
-- Add inspection-history database support.
-- Add side-by-side YOLO-vs-proposal matching metrics.
+**Data limitations.** No real marine-field validation has been completed. Expert-reviewed, licensed structural datasets are not yet represented in the public repository.
 
-## CV-Relevant Project Description
+**Deployment limitations.** No trained downstream model has been validated on real data. Processing time is hardware-dependent, and the current system is not calibrated for physical scale, temporal progression, or safety-critical decisions.
 
-Built StructVision-AI, a visual inspection and dataset-generation system that performs preprocessing, classical feature extraction, anomaly candidate proposal, segmentation-ready mask creation, visual priority scoring, human-in-the-loop labeling, YOLO-format dataset export, optional trained YOLO inference, and automated PDF reporting for structural or surface inspection images.
+## Research Roadmap
+
+### Immediate
+
+- retain `ABL-RERANK-ONLY` as an experimental candidate;
+- develop specular-highlight suppression;
+- verify preservation of pitting recall and thin-crack localisation; and
+- repeat paired controlled evaluation.
+
+### Benchmark Expansion
+
+- generate a substantially larger controlled benchmark;
+- add corrosion-like, weld, coating, blur, illumination, reflection, and mixed-anomaly conditions; and
+- evaluate multiple seeds and perturbation levels.
+
+### Real-World Validation
+
+- ingest professor-provided or licensed public datasets;
+- establish expert-reviewed ground truth;
+- perform cross-domain and category-wise evaluation; and
+- study synthetic-to-real generalisation.
+
+### Learning-Based Extension
+
+- evaluate SAM/SAM2-assisted mask refinement;
+- train YOLO detection or segmentation models after sufficient review; and
+- compare proposal-assisted annotation with conventional annotation effort.
+
+### Inspection-System Extension
+
+- support video and frame sequences, temporal consistency, physical scale calibration, progression tracking, and uncertainty-aware active learning.
+
+All roadmap items are planned and are not current validated capabilities.
+
+## Citation
+
+The following citation is provisional and should be updated after an archival release or publication:
+
+```bibtex
+@software{structvision_ai_2026,
+  author = {Mrithunjoy Basumatary},
+  title = {StructVision-AI: Human-in-the-Loop Visual Anomaly Proposal, Dataset Construction, and Reproducible Evaluation for Structural Surface Inspection},
+  year = {2026},
+  url = {https://github.com/MrithunjoyB/marine-structural-defect-inspection}
+}
+```
+
+## Licence
+
+No open-source licence has yet been declared for this repository. The absence of a licence does not grant unrestricted permission to use, modify, or redistribute the code or data. A suitable licence should be added separately after ownership and data obligations are reviewed.
+
+## Acknowledgements
+
+StructVision-AI was developed in the context of interests in Ocean Engineering and Naval Architecture. Faculty guidance is acknowledged generically; this repository does not imply institutional sponsorship, endorsement, or validation.
