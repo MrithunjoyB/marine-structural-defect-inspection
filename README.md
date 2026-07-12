@@ -254,7 +254,9 @@ Validation reports include total/valid/corrupt files, exact and possible near du
 
 ### Splits And Leakage
 
-The default split is 70/15/15 with a deterministic seed. Available class labels are stratified while exact duplicates, perceptual near duplicates, and explicit sequence/component groups stay together. Finalization checks duplicate hashes, near duplicates, and group IDs across splits and blocks leakage unless an explicit override is confirmed. The resulting split manifest records every image assignment.
+The default split requests 70/15/15 with a deterministic seed, but allocation is group-aware and stratified by anomaly type, positive/clean outcome, and clean artefact subtype. Exact duplicates are excluded; near-duplicate, source, and template groups remain indivisible. Finalization previews image/outcome/category/group composition and blocks leakage or a test set without positive, negative, and category diversity unless an explicit warning override is recorded.
+
+**Balanced Synthetic Benchmark** uses constrained allocation for the 33-image controlled dataset. With seed 42 it produces 15 train, 6 validation, and 12 test images: test contains `thin_crack`, `pitting_cluster`, `normal_texture`, and `specular_highlights` template groups. The larger-than-15% test split is intentional so representative positive and clean categories remain present without splitting related templates.
 
 ### Experiment Reproducibility
 
@@ -265,6 +267,8 @@ Creating a plan freezes selection and configuration but does not analyze images.
 Automatic matching accepts a proposal when it reaches the configured bounding-mask IoU or ground-truth overlap threshold. A centroid-inside-ground-truth fallback supports very thin anomalies. Top-K proposal recall counts a positive image as a hit when at least one of its first K ranked proposals matches a verified anomaly. Proposal precision is matched proposals divided by all proposals; proposal recall is matched ground-truth instances divided by all ground-truth instances; false proposals are unmatched final proposals. Clean images are excluded from positive Top-K denominators, and every proposal on a clean image is false.
 
 Automatic rows use `review_status = automatically_evaluated` and remain separate from human-review records. Executions move through planned, running, completed, partially completed, failed, or cancelled states. Resume skips completed image-method pairs, retry targets failed pairs, overwrite explicitly replaces completed pairs, and create-new-version preserves prior runs. Results, configuration, selected manifest, and method summaries are downloadable as CSV or JSON; **Open Selected Test Image** displays the original, exact mask, matched/unmatched proposals, ranks, and IoU values.
+
+Experiment plans may select anomaly-present images, clean images, specific anomaly or clean artefact types, or a balanced positive/negative subset. Clean-only runs are labeled **False-positive robustness evaluation**; precision and false-proposal metrics remain valid, while recall is explicitly undefined and empty recall charts are suppressed.
 
 Development/Test experiments may use local development images and unknown ground truth and remain excluded from final summaries by default. Final Research Evaluation requires a registered dataset, verified or reviewer-estimated ground truth, source/licence metadata, and a configuration snapshot; unknown provenance or licence is blocked unless explicitly overridden with a warning.
 

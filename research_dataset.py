@@ -30,6 +30,8 @@ GROUND_TRUTH_OPTIONS=("verified expert annotation","verified dataset annotation"
 ANNOTATION_FORMATS=("none","YOLO bounding boxes","YOLO segmentation","COCO JSON","Pascal VOC","binary masks","CSV regions","custom")
 SUPPORTED_IMAGE_SUFFIXES={".jpg",".jpeg",".png",".bmp",".tif",".tiff",".webp"}
 FINAL_STATUS="Final Research Evaluation"
+SYNTHETIC_POSITIVE_TYPES=("thin_crack","weld_disturbance","pitting_cluster","colour_only","texture_only")
+SYNTHETIC_CLEAN_TYPES=("normal_texture","illumination_gradient","black_border","specular_highlights","blur","gaussian_noise")
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,8 @@ class ImageManifestRecord:
     dataset_version:str=""; duplicate_group_id:str=""; canonical_image_id:str=""
     duplicate_type:str="unique"; split_eligible:int=1; generation_seed:str=""
     synthetic_anomaly_type:str=""; generation_parameters:str=""
+    anomaly_type:str=""; image_outcome:str=""; source_group_id:str=""
+    template_group_id:str=""; near_duplicate_group_id:str=""
 
 
 @dataclass(frozen=True)
@@ -98,6 +102,13 @@ class DatasetRegistry:
             con.execute("UPDATE images SET dataset_version=COALESCE((SELECT dataset_version FROM datasets WHERE datasets.dataset_id=images.dataset_id ORDER BY registered_timestamp DESC LIMIT 1),'') WHERE dataset_version='' OR dataset_version IS NULL")
             con.execute("UPDATE images SET duplicate_type=CASE duplicate_status WHEN 'exact duplicate' THEN 'exact image duplicate' WHEN 'possible near duplicate' THEN 'near duplicate' ELSE 'unique' END WHERE duplicate_type='' OR duplicate_type IS NULL")
             con.execute("UPDATE images SET split_eligible=0 WHERE duplicate_type='exact image duplicate'")
+            con.execute("UPDATE images SET anomaly_type=synthetic_anomaly_type WHERE anomaly_type='' AND synthetic_anomaly_type!=''")
+            positive=",".join(f"'{item}'" for item in SYNTHETIC_POSITIVE_TYPES)
+            con.execute(f"UPDATE images SET image_outcome=CASE WHEN anomaly_type IN ({positive}) THEN 'anomaly_present' WHEN anomaly_type!='' THEN 'no_anomaly' ELSE image_outcome END WHERE image_outcome='' OR image_outcome IS NULL")
+            con.execute("UPDATE images SET template_group_id='template:'||anomaly_type WHERE template_group_id='' AND anomaly_type!=''")
+            con.execute("UPDATE images SET source_group_id=group_id WHERE source_group_id='' AND group_id!=''")
+            con.execute("UPDATE images SET near_duplicate_group_id=duplicate_group_id WHERE near_duplicate_group_id='' AND duplicate_type='near duplicate'")
+            con.execute("UPDATE images SET near_duplicate_group_id='', duplicate_group_id='', duplicate_type='unique', duplicate_status='unique', canonical_image_id='' WHERE synthetic_anomaly_type!='' AND duplicate_type='near duplicate'")
 
     def register_dataset(self,metadata:DatasetMetadata,overwrite=False):
         metadata.validate(); now=datetime.now().isoformat(timespec="seconds")
@@ -142,18 +153,28 @@ class DatasetRegistry:
             mask_dir=self.root/"annotations"/"references"; mask_dir.mkdir(parents=True,exist_ok=True); path=mask_dir/f"{image_id}_reference.png"; path.write_bytes(mask_bytes); mask_path=str(path)
         with self.connect() as con: con.execute("INSERT INTO reviews VALUES(?,?,?,?,?,?,?,?,?,?)",(str(uuid4()),image_id,"reference ground truth",outcome,json.dumps(bbox) if bbox else "",mask_path,reviewer_id,float(confidence),notes,datetime.now().isoformat(timespec="seconds")))
 
-    def create_experiment_plan(self,experiment_id,dataset_id,dataset_version,split,subset_size,status,reviewer_id,methods,parameters,seed,override=False):
+    def create_experiment_plan(self,experiment_id,dataset_id,dataset_version,split,subset_size,status,reviewer_id,methods,parameters,seed,override=False,subset_filter="all",anomaly_types=None,clean_types=None):
         metadata=self.metadata(dataset_id,dataset_version); images=self.images(dataset_id); images=images[images.split==split] if split!="all" else images
+        anomaly_types=list(anomaly_types or []); clean_types=list(clean_types or [])
+        if subset_filter=="anomaly-present only": images=images[images.image_outcome=="anomaly_present"]
+        elif subset_filter=="no-anomaly only": images=images[images.image_outcome=="no_anomaly"]
+        if anomaly_types: images=images[(images.image_outcome!="anomaly_present")|images.anomaly_type.isin(anomaly_types)]
+        if clean_types: images=images[(images.image_outcome!="no_anomaly")|images.anomaly_type.isin(clean_types)]
         if status==FINAL_STATUS:
             problems=[]
             if metadata.ground_truth_status in {"unknown","no annotation"}: problems.append("verified or reviewer-estimated ground truth")
             if not metadata.source_name or not metadata.provider_author or not metadata.licence: problems.append("source, provider, and licence metadata")
             if metadata.licence.lower()=="unknown": problems.append("known licence")
             if problems and not override: raise ValueError("Final experiment requires "+", ".join(problems))
-        selected=images.sample(min(int(subset_size),len(images)),random_state=int(seed)) if len(images) else images
+        if subset_filter=="balanced positive/negative subset" and len(images):
+            positives=images[images.image_outcome=="anomaly_present"]; negatives=images[images.image_outcome=="no_anomaly"]; each=min(len(positives),len(negatives),max(int(subset_size)//2,1)); selected=pd.concat([positives.sample(each,random_state=int(seed)),negatives.sample(each,random_state=int(seed)+1)]); remaining=int(subset_size)-len(selected)
+            if remaining>0:
+                pool=images[~images.image_id.isin(selected.image_id)]; selected=pd.concat([selected,pool.sample(min(remaining,len(pool)),random_state=int(seed)+2)])
+        else: selected=images.sample(min(int(subset_size),len(images)),random_state=int(seed)) if len(images) else images
+        if selected.empty: raise ValueError("No registered images match the experiment subset filters")
         snapshot=create_configuration_snapshot(parameters)
         manifest_hash=hashlib.sha256(selected.to_json(orient="records").encode()).hexdigest()
-        plan_id=str(uuid4()); config={**snapshot,"proposal_methods":list(methods),"random_seed":int(seed)}
+        plan_id=str(uuid4()); config={**snapshot,"proposal_methods":list(methods),"random_seed":int(seed),"subset_filter":subset_filter,"selected_anomaly_types":anomaly_types,"selected_clean_types":clean_types}
         with self.connect() as con: con.execute("INSERT INTO experiment_plans VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",(plan_id,experiment_id,dataset_id,dataset_version,split,json.dumps(selected.image_id.tolist()),json.dumps(config),manifest_hash,config["code_commit_hash"],datetime.now().isoformat(timespec="seconds"),status,reviewer_id))
         path=self.root/"exports"/f"{experiment_id}_configuration.json"; path.write_text(json.dumps({"plan_id":plan_id,"dataset_id":dataset_id,"dataset_version":dataset_version,"manifest_hash":manifest_hash,"selected_image_ids":selected.image_id.tolist(),"configuration":config},indent=2))
         return path
@@ -196,8 +217,8 @@ def ingest_files(registry:DatasetRegistry,metadata:DatasetMetadata,files:Iterabl
                 invalid_annotations+=int(not valid)
                 if classes: primary_class=classes[0]
                 for item in classes: class_counts[item]=class_counts.get(item,0)+1
-        image_id=str(uuid4()); params=generation_parameters.get(Path(original).stem,{})
-        records.append(ImageManifestRecord(image_id,metadata.dataset_id,original,stored,sha,width,height,channels,suffix.lstrip("."),len(data),metadata.source_name,metadata.licence,metadata.ground_truth_status,ann_path,"unassigned",duplicate,corruption,datetime.now().isoformat(timespec="seconds"),"",phash,"",primary_class,metadata.dataset_version,duplicate_group,canonical,duplicate_type,0 if duplicate_type=="exact image duplicate" else 1,str(params.get("derived_seed","")),params.get("anomaly_type",""),json.dumps(params,sort_keys=True)))
+        image_id=str(uuid4()); params=generation_parameters.get(Path(original).stem,{}); anomaly_type=params.get("anomaly_type",""); outcome="anomaly_present" if anomaly_type in SYNTHETIC_POSITIVE_TYPES else ("no_anomaly" if anomaly_type else "")
+        records.append(ImageManifestRecord(image_id,metadata.dataset_id,original,stored,sha,width,height,channels,suffix.lstrip("."),len(data),metadata.source_name,metadata.licence,metadata.ground_truth_status,ann_path,"unassigned",duplicate,corruption,datetime.now().isoformat(timespec="seconds"),"",phash,"",primary_class,metadata.dataset_version,duplicate_group,canonical,duplicate_type,0 if duplicate_type=="exact image duplicate" else 1,str(params.get("derived_seed","")),anomaly_type,json.dumps(params,sort_keys=True),anomaly_type,outcome,"",f"template:{anomaly_type}" if anomaly_type else "",duplicate_group if duplicate_type=="near duplicate" else ""))
         existing_hashes.setdefault(sha,image_id); existing_phashes.append((phash,image_id))
     registry.add_images(records); report=build_validation_report(records,class_counts,missing_annotations,invalid_annotations); _save_validation(registry,metadata.dataset_id,records,report); return records,report
 
@@ -246,7 +267,11 @@ def validate_annotation(fmt,data,width,height):
     except (ValueError,UnicodeDecodeError,json.JSONDecodeError): return False,[]
 
 
-def prepare_split(registry:DatasetRegistry,dataset_id,ratios=(.7,.15,.15),seed=42,override_leakage=False):
+BALANCED_TEST_REQUIRED=("thin_crack","pitting_cluster","normal_texture","specular_highlights")
+BALANCED_VALIDATION_REQUIRED=("weld_disturbance","illumination_gradient")
+
+
+def prepare_split(registry:DatasetRegistry,dataset_id,ratios=(.7,.15,.15),seed=42,override_leakage=False,mode="Group-aware stratified",override_composition=False,dry_run=False):
     if abs(sum(ratios)-1)>1e-6 or any(v<0 for v in ratios): raise ValueError("Split ratios must be non-negative and sum to 1")
     images=registry.images(dataset_id); valid=images[(images.corruption_status=="valid")&(images.split_eligible.astype(int)==1)].copy(); rng=random.Random(seed)
     ordered=valid.sort_values("image_id").reset_index(drop=True); parent=list(range(len(ordered)))
@@ -258,26 +283,67 @@ def prepare_split(registry:DatasetRegistry,dataset_id,ratios=(.7,.15,.15),seed=4
         if left!=right: parent[right]=left
     for left in range(len(ordered)):
         for right in range(left+1,len(ordered)):
-            a,b=ordered.iloc[left],ordered.iloc[right]; group_a=str(a.group_id).strip() if pd.notna(a.group_id) else ""; group_b=str(b.group_id).strip() if pd.notna(b.group_id) else ""
-            related=(group_a and group_a==group_b) or (a.synthetic_anomaly_type and a.synthetic_anomaly_type==b.synthetic_anomaly_type) or (a.perceptual_hash and b.perceptual_hash and hamming_distance(a.perceptual_hash,b.perceptual_hash)<=5)
+            a,b=ordered.iloc[left],ordered.iloc[right]
+            fields=("source_group_id","template_group_id","near_duplicate_group_id","group_id")
+            near_a=str(a.near_duplicate_group_id).removeprefix("near:"); near_b=str(b.near_duplicate_group_id).removeprefix("near:")
+            related=a.sha256_hash==b.sha256_hash or near_a==b.image_id or near_b==a.image_id or any(str(a[field]).strip() and str(a[field]).strip()==str(b[field]).strip() for field in fields)
             if related: union(left,right)
     groups={}
     for index,row in ordered.iterrows():
-        key=str(find(index)); group=groups.setdefault(key,{"ids":[],"class":row.primary_class or "__unlabelled__"}); group["ids"].append(row.image_id)
-    buckets={}
-    for key,value in groups.items():buckets.setdefault(value["class"],[]).append(key)
-    assignments={}
-    for class_name,keys in sorted(buckets.items()):
-        rng.shuffle(keys); class_total=sum(len(groups[key]["ids"]) for key in keys); targets=[round(class_total*ratios[0]),round(class_total*ratios[1])]; counts=[0,0,0]
+        key=str(find(index)); group=groups.setdefault(key,{"ids":[],"category":row.anomaly_type or row.primary_class or "unclassified","outcome":row.image_outcome or "unknown"}); group["ids"].append(row.image_id)
+    assignments={}; allocation={}; keys=sorted(groups)
+    if mode=="Balanced Synthetic Benchmark":
+        by_category={value["category"]:key for key,value in groups.items()}
+        missing=[item for item in BALANCED_TEST_REQUIRED+BALANCED_VALIDATION_REQUIRED if item not in by_category]
+        if missing and not override_composition: raise ValueError(f"Balanced benchmark categories are missing: {missing}")
+        for category in BALANCED_TEST_REQUIRED:
+            if category in by_category: allocation[by_category[category]]="test"
+        for category in BALANCED_VALIDATION_REQUIRED:
+            if category in by_category: allocation[by_category[category]]="validation"
         for key in keys:
-            index=0 if counts[0]<targets[0] else (1 if counts[1]<targets[1] else 2)
-            for image_id in groups[key]["ids"]: assignments[image_id]=("train","validation","test")[index]
-            counts[index]+=len(groups[key]["ids"])
+            if key not in allocation: allocation[key]="train"
+    else:
+        strata={}
+        for key,value in groups.items(): strata.setdefault((value["outcome"],value["category"]),[]).append(key)
+        counts={name:0 for name in ("train","validation","test")}; targets=dict(zip(("train","validation","test"),[len(valid)*value for value in ratios]))
+        ordered_keys=[]
+        for stratum in sorted(strata): rng.shuffle(strata[stratum]); ordered_keys.extend(strata[stratum])
+        for key in ordered_keys:
+            split=min(counts,key=lambda name:(counts[name]+len(groups[key]["ids"]))/max(targets[name],1)); allocation[key]=split; counts[split]+=len(groups[key]["ids"])
+    for key,split in allocation.items():
+        for image_id in groups[key]["ids"]: assignments[image_id]=split
+    updated=registry.images(dataset_id); updated["split"]=updated.apply(lambda row:assignments.get(row.image_id,row.split),axis=1); leaks=check_leakage(updated)
+    if any(leaks.values()) and not override_leakage: raise ValueError(f"Split leakage detected: {leaks}")
+    blockers=split_blockers(updated,mode)
+    if blockers and not override_composition: raise ValueError("Unsafe test split: "+"; ".join(blockers))
+    if dry_run:return updated,leaks,None
     with registry.connect() as con:
         for image_id,split in assignments.items(): con.execute("UPDATE images SET split=? WHERE image_id=?",(split,image_id))
-    registry._write_manifest_json(); updated=registry.images(dataset_id); leaks=check_leakage(updated)
-    if any(leaks.values()) and not override_leakage: raise ValueError(f"Split leakage detected: {leaks}")
+    registry._write_manifest_json(); updated=registry.images(dataset_id)
     split_dir=registry.root/"splits"/dataset_id; split_dir.mkdir(parents=True,exist_ok=True); path=split_dir/"split_manifest.json"; path.write_text(updated.to_json(orient="records",indent=2)); return updated,leaks,path
+
+
+def split_composition(images:pd.DataFrame):
+    eligible=images[(images.corruption_status=="valid")&(images.split_eligible.astype(int)==1)].copy(); rows=[]; categories=sorted(value for value in eligible.anomaly_type.unique() if value)
+    for split in ("train","validation","test"):
+        subset=eligible[eligible.split==split]; present=set(subset.anomaly_type); group_columns=["source_group_id","template_group_id","near_duplicate_group_id"]
+        groups=set()
+        for column in group_columns: groups.update(value for value in subset[column].astype(str) if value)
+        rows.append({"split":split,"image_count":len(subset),"anomaly_present":int((subset.image_outcome=="anomaly_present").sum()),"no_anomaly":int((subset.image_outcome=="no_anomaly").sum()),"anomaly_type_distribution":subset[subset.image_outcome=="anomaly_present"].anomaly_type.value_counts().to_dict(),"clean_artefact_distribution":subset[subset.image_outcome=="no_anomaly"].anomaly_type.value_counts().to_dict(),"groups":len(groups),"missing_categories":[item for item in categories if item not in present]})
+    return pd.DataFrame(rows)
+
+
+def split_blockers(images:pd.DataFrame,mode="Group-aware stratified"):
+    eligible=images[images.split_eligible.astype(int)==1]
+    if not eligible.image_outcome.astype(str).str.len().gt(0).any(): return []
+    test=eligible[eligible.split=="test"]; blockers=[]
+    if not (test.image_outcome=="anomaly_present").any(): blockers.append("test has no positive anomaly image")
+    if not (test.image_outcome=="no_anomaly").any(): blockers.append("test has no negative/clean image")
+    if test.anomaly_type.replace("",np.nan).dropna().nunique()<2: blockers.append("test contains only one category")
+    if mode=="Balanced Synthetic Benchmark":
+        missing=[item for item in BALANCED_TEST_REQUIRED if item not in set(test.anomaly_type)]
+        if missing:blockers.append(f"test omits required benchmark categories: {missing}")
+    return blockers
 
 
 def check_leakage(images:pd.DataFrame):
@@ -285,11 +351,11 @@ def check_leakage(images:pd.DataFrame):
     def conflicts(column):
         if column not in images:return 0
         grouped=images[images[column].astype(str)!=""].groupby(column).split.nunique(); return int((grouped>1).sum())
-    near=0; rows=images[images.perceptual_hash.astype(str)!=""]
-    values=rows[["perceptual_hash","split"]].to_records(index=False)
-    for index,(left_hash,left_split) in enumerate(values):
-        if any(left_split!=right_split and hamming_distance(left_hash,right_hash)<=5 for right_hash,right_split in values[index+1:]):near+=1
-    return {"duplicate_hash_across_splits":conflicts("sha256_hash"),"near_duplicate_across_splits":near,"group_across_splits":conflicts("group_id")}
+    split_by_id=dict(zip(images.image_id,images.split)); near_links=0
+    for _,row in images[images.near_duplicate_group_id.astype(str)!=""].iterrows():
+        canonical=str(row.near_duplicate_group_id).removeprefix("near:")
+        near_links+=int(canonical in split_by_id and split_by_id[canonical]!=row.split)
+    return {"duplicate_hash_across_splits":conflicts("sha256_hash"),"near_duplicate_across_splits":conflicts("near_duplicate_group_id")+near_links,"group_across_splits":sum(conflicts(column) for column in ("group_id","source_group_id","template_group_id"))}
 
 
 def licence_allows_public_export(metadata:DatasetMetadata,override=False):

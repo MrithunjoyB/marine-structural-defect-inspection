@@ -4,6 +4,7 @@ import unittest
 
 import cv2
 import numpy as np
+import pandas as pd
 
 from experiment_tracking import METHOD_NAMES
 from registered_experiment import (
@@ -19,6 +20,7 @@ class MatchingTests(unittest.TestCase):
         metrics=match_proposals([np.zeros_like(truth),hit],truth,.1,.2)
         self.assertAlmostEqual(mask_iou(hit,truth),.64); self.assertEqual(metrics["first_true_anomaly_proposal_rank"],2); self.assertFalse(metrics["top_1_hit"]); self.assertTrue(metrics["top_3_hit"])
         clean=match_proposals([hit],np.zeros_like(truth)); self.assertIsNone(clean["top_1_hit"]); self.assertEqual(clean["false_positive_proposals"],1); self.assertIsNone(clean["proposal_recall"])
+        clean_rows=pd.DataFrame([{"method":"refined contextual method","run_status":"completed","proposal_recall":None,"top_1_hit":None,"top_3_hit":None,"top_5_hit":None,"top_8_hit":None,"proposal_precision":0.,"false_positive_proposals":1,"processing_time_seconds":.1}]); summary=method_summary(clean_rows); self.assertTrue(np.isnan(summary.proposal_recall.iloc[0])); self.assertEqual(summary.proposal_precision.iloc[0],0.)
 
     def test_thin_crack_centroid_fallback(self):
         truth=np.zeros((50,50),np.uint8); cv2.line(truth,(5,25),(45,25),255,1); proposal=np.zeros_like(truth); proposal[20:31,20:31]=255

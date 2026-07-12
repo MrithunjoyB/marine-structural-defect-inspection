@@ -100,6 +100,9 @@ def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:d
     versions=datasets[datasets.dataset_id==dataset_id].dataset_version.tolist(); version=st.selectbox("Registered dataset version",versions)
     images=registry.images(dataset_id); splits=["all"]+sorted(value for value in images.split.unique().tolist() if value and value!="unassigned")
     row=st.columns(3); split=row[0].selectbox("Dataset split",splits); subset=row[1].number_input("Subset size",1,max(len(images),1),min(len(images),100) if len(images) else 1); seed=row[2].number_input("Experiment random seed",0,1000000,42)
+    subset_filter=st.selectbox("Experiment subset filter",["all","anomaly-present only","no-anomaly only","balanced positive/negative subset"])
+    anomaly_options=sorted(images[images.image_outcome=="anomaly_present"].anomaly_type.dropna().unique().tolist()); clean_options=sorted(images[images.image_outcome=="no_anomaly"].anomaly_type.dropna().unique().tolist())
+    filter_columns=st.columns(2); selected_anomalies=filter_columns[0].multiselect("Selected anomaly types",anomaly_options); selected_clean=filter_columns[1].multiselect("Selected clean artefact types",clean_options)
     row=st.columns(3); status=row[0].selectbox("Registered experiment status",["Development / Test",FINAL_STATUS]); reviewer=row[1].text_input("Registered experiment reviewer"); experiment_id=row[2].text_input("Registered experiment ID")
     methods=st.multiselect("Proposal methods",list(METHOD_NAMES),default=list(METHOD_NAMES))
     default_config={"preprocessing":preprocessing_settings,"proposal":{},"feature_weights":{},"thresholds":{},"border_margin":preprocessing_settings.get("border_margin"),"maximum_regions":preprocessing_settings.get("max_regions"),"ablation":{key:value for key,value in preprocessing_settings.items() if key.startswith("use_")}}
@@ -109,7 +112,7 @@ def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:d
         try:
             if not experiment_id.strip() or not reviewer.strip() or not methods: raise ValueError("Experiment ID, reviewer, and at least one method are required")
             parameters=json.loads(configuration_text)
-            path=registry.create_experiment_plan(experiment_id,dataset_id,version,split,int(subset),status,reviewer,methods,parameters,int(seed),override)
+            path=registry.create_experiment_plan(experiment_id,dataset_id,version,split,int(subset),status,reviewer,methods,parameters,int(seed),override,subset_filter,selected_anomalies,selected_clean)
             st.success("Created reproducible registered-dataset experiment plan.")
             st.download_button("Download Experiment Configuration JSON",path.read_bytes(),path.name,"application/json")
         except (ValueError,json.JSONDecodeError) as error: st.error(str(error))
@@ -157,8 +160,14 @@ def _render_automatic_results(registry,store,plan_id,version):
     plan=load_plan(registry,plan_id); selected=selected_images(registry,plan); config=json.dumps(plan,indent=2,default=str).encode(); manifest=selected.to_json(orient="records",indent=2).encode(); report=json.dumps({"execution":store.execution(plan_id,version),"summary":summary.to_dict("records")},indent=2,default=str).encode()
     downloads[2].download_button("Experiment configuration JSON",config,"experiment_configuration.json","application/json"); downloads[3].download_button("Selected image manifest",manifest,"selected_image_manifest.json","application/json"); downloads[4].download_button("Summary report",report,"summary_report.json","application/json")
     if not summary.empty:
-        _grouped_chart(summary,{"Top-1":"top_1_proposal_recall","Top-3":"top_3_proposal_recall","Top-5":"top_5_proposal_recall","Top-8":"top_8_proposal_recall"},"Automatic Top-K Recall","Recall",True)
-        _grouped_chart(summary,{"Precision":"proposal_precision","Recall":"proposal_recall"},"Automatic Precision / Recall","Score",True)
+        result_images=selected[selected.image_id.isin(results.image_id.unique())]; positive_count=int((result_images.image_outcome=="anomaly_present").sum())
+        if positive_count:
+            _grouped_chart(summary,{"Top-1":"top_1_proposal_recall","Top-3":"top_3_proposal_recall","Top-5":"top_5_proposal_recall","Top-8":"top_8_proposal_recall"},"Automatic Top-K Recall","Recall",True)
+            _grouped_chart(summary,{"Precision":"proposal_precision","Recall":"proposal_recall"},"Automatic Precision / Recall","Score",True)
+        else:
+            st.markdown("##### False-positive robustness evaluation")
+            st.info("Recall is undefined because no positive anomaly images are eligible. Empty recall series are not displayed.")
+            _single_chart(summary,"proposal_precision","Automatic Proposal Precision on Clean Images","Precision",percent=True)
         _single_chart(summary,"false_proposals_per_image","Automatic False Proposals per Image","False proposals")
         _single_chart(summary,"processing_time_seconds","Automatic Processing Time","Seconds")
     selected_id=st.selectbox("Selected test image",results.image_id.unique(),format_func=lambda value:results.loc[results.image_id==value,"image_filename"].iloc[0])

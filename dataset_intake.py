@@ -13,7 +13,7 @@ import streamlit as st
 from research_dataset import (
     ANNOTATION_FORMATS, GROUND_TRUTH_OPTIONS, SOURCE_TYPES, DatasetMetadata,
     DatasetRegistry, extract_zip, ingest_files, licence_allows_public_export,
-    prepare_split, register_synthetic_benchmark,
+    prepare_split, register_synthetic_benchmark, split_composition,
 )
 from dataset_management import DatasetManager
 
@@ -184,15 +184,22 @@ def _split_section(registry):
     datasets=registry.datasets()
     if datasets.empty: st.info("Register a dataset before preparing splits."); return
     dataset_id=st.selectbox("Dataset for split",datasets.dataset_id.unique(),key="split_dataset")
+    split_mode=st.selectbox("Split mode",["Group-aware stratified","Balanced Synthetic Benchmark"])
     row=st.columns(4)
     train=int(row[0].number_input("Train %",0,100,70)); validation=int(row[1].number_input("Validation %",0,100,15)); test=int(row[2].number_input("Test %",0,100,15)); seed=int(row[3].number_input("Split seed",0,1000000,42))
     images=registry.images(dataset_id); total=len(images[images.corruption_status=="valid"])
-    st.json({"preview_train":round(total*train/100),"preview_validation":round(total*validation/100),"preview_test":total-round(total*train/100)-round(total*validation/100),"deterministic_seed":seed})
+    st.caption("Split-composition preview")
+    try:
+        preview,preview_leaks,_=prepare_split(registry,dataset_id,(train/100,validation/100,test/100),seed,True,split_mode,True,True)
+        st.dataframe(split_composition(preview),width="stretch",hide_index=True); st.json({"leakage_check":preview_leaks,"requested_ratios":{"train":train,"validation":validation,"test":test},"final_counts":preview.groupby("split").size().to_dict(),"note":"Constrained group allocation may differ from requested percentages to preserve category coverage."})
+    except ValueError as error: st.warning(str(error))
     override=st.checkbox("Override detected split leakage")
+    composition_override=st.checkbox("Explicitly override unsafe test-composition warning")
+    if composition_override: st.warning("Override permits a test split without required positive/negative/category coverage. Recall conclusions may be invalid.")
     confirm=st.checkbox("Confirm split finalization")
     if st.button("Finalize Split",disabled=not confirm):
         try:
-            result,leaks,path=prepare_split(registry,dataset_id,(train/100,validation/100,test/100),seed,override)
+            result,leaks,path=prepare_split(registry,dataset_id,(train/100,validation/100,test/100),seed,override,split_mode,composition_override)
             st.success(f"Saved split manifest: {path.name}"); st.json({"split_counts":result.groupby('split').size().to_dict(),"leakage_checks":leaks})
         except ValueError as error: st.error(str(error))
 

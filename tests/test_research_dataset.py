@@ -1,5 +1,6 @@
 from dataclasses import replace
 from pathlib import Path
+import json
 import tempfile
 import unittest
 
@@ -10,7 +11,7 @@ import pandas as pd
 from research_dataset import (
     DatasetMetadata,DatasetRegistry,create_configuration_snapshot,hamming_distance,ingest_files,
     licence_allows_public_export,prepare_split,register_synthetic_benchmark,sha256_file,
-    validate_annotation,
+    validate_annotation,check_leakage,split_blockers,split_composition,
 )
 from research_evaluation import chart_height,has_valid_metric
 from dataset_management import DatasetManager
@@ -82,6 +83,24 @@ class ResearchDatasetTests(unittest.TestCase):
         records,report=register_synthetic_benchmark(self.registry,seed=5)
         self.assertGreaterEqual(len(records),11); self.assertEqual(report.valid_images,len(records))
         self.assertTrue(all(record.annotation_path for record in records))
+
+    def test_balanced_synthetic_split_has_category_and_outcome_coverage(self):
+        register_synthetic_benchmark(self.registry,seed=42)
+        first,leaks,_=prepare_split(self.registry,"synthetic-controlled",seed=42,mode="Balanced Synthetic Benchmark")
+        test=first[first.split=="test"]; self.assertTrue((test.image_outcome=="anomaly_present").any()); self.assertTrue((test.image_outcome=="no_anomaly").any()); self.assertGreater(test.anomaly_type.nunique(),1); self.assertFalse(any(leaks.values())); self.assertEqual(split_blockers(first,"Balanced Synthetic Benchmark"),[])
+        first_map=dict(zip(first.image_id,first.split)); second,_,_=prepare_split(self.registry,"synthetic-controlled",seed=42,mode="Balanced Synthetic Benchmark"); self.assertEqual(first_map,dict(zip(second.image_id,second.split)))
+        composition=split_composition(first); self.assertEqual(set(composition.split),{"train","validation","test"})
+
+    def test_missing_benchmark_category_blocks_finalization(self):
+        register_synthetic_benchmark(self.registry,seed=42); frame=self.registry.images("synthetic-controlled"); frame.loc[frame.anomaly_type=="thin_crack","split"]="train"; frame.loc[frame.anomaly_type=="normal_texture","split"]="test"
+        blockers=split_blockers(frame,"Balanced Synthetic Benchmark"); self.assertTrue(any("required benchmark categories" in item for item in blockers))
+
+    def test_experiment_subset_filters(self):
+        register_synthetic_benchmark(self.registry,seed=42); prepare_split(self.registry,"synthetic-controlled",seed=42,mode="Balanced Synthetic Benchmark")
+        self.registry.create_experiment_plan("POS","synthetic-controlled","1.0","test",20,"Development / Test","REV",["refined contextual method"],{},42,subset_filter="anomaly-present only")
+        self.registry.create_experiment_plan("CLEAN","synthetic-controlled","1.0","test",20,"Development / Test","REV",["refined contextual method"],{},42,subset_filter="no-anomaly only")
+        with self.registry.connect() as con: plans=con.execute("SELECT experiment_id,selected_image_ids_json FROM experiment_plans").fetchall()
+        images=self.registry.images("synthetic-controlled").set_index("image_id"); selected={row[0]:json.loads(row[1]) for row in plans}; self.assertTrue(all(images.loc[item].image_outcome=="anomaly_present" for item in selected["POS"])); self.assertTrue(all(images.loc[item].image_outcome=="no_anomaly" for item in selected["CLEAN"]))
 
     def test_annotations_are_not_image_duplicates(self):
         image=png_bytes(); annotations={"a.png":png_bytes(255),"b.png":png_bytes(255)}

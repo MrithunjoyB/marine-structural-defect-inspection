@@ -11,6 +11,8 @@
     "corruption_status", "imported_timestamp", "notes", "perceptual_hash",
     "group_id", "primary_class", "dataset_version", "duplicate_group_id",
     "canonical_image_id", "duplicate_type", "split_eligible", "generation_seed",
-    "synthetic_anomaly_type", "generation_parameters"
+    "synthetic_anomaly_type", "generation_parameters", "anomaly_type",
+    "image_outcome", "source_group_id", "template_group_id",
+    "near_duplicate_group_id"
   ]
 }
