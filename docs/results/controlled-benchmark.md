@@ -38,3 +38,5 @@ Paired bootstrap inputs contain 12 images for precision and false proposals, and
 Normal-texture images produce zero false proposals under the recorded advanced methods. Specular-highlight images remain a persistent false-positive condition. Pitting-cluster ground-truth instance recall is incomplete, while thin-crack recall is preserved in the controlled test. These observations motivate benchmark expansion and real-data validation rather than deployment claims.
 
 An opt-in follow-up, `ABL-RERANK-SPECULAR-SUPPRESS`, reduced the recorded specular-highlight burden from 3.0 to 2.0 proposals per image in `SYN-SPECULAR-SUPPRESS-001` version 2 while preserving the recorded crack, pitting, and normal-texture criteria. The complete protocol, negative pilot, and limitations are documented in [Specular Suppression](specular-suppression.md).
+
+The subsequent 100-image frozen test did not validate the method because one weld-disturbance detection was lost and aggregate recall decreased. See [Expanded Synthetic Benchmark](expanded-synthetic-benchmark.md). This later negative result supersedes any interpretation of the 12-image result as sufficient validation.

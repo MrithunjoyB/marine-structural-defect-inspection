@@ -184,7 +184,7 @@ def _split_section(registry):
     datasets=registry.datasets()
     if datasets.empty: st.info("Register a dataset before preparing splits."); return
     dataset_id=st.selectbox("Dataset for split",datasets.dataset_id.unique(),key="split_dataset")
-    split_mode=st.selectbox("Split mode",["Group-aware stratified","Balanced Synthetic Benchmark"])
+    split_mode=st.selectbox("Split mode",["Group-aware stratified","Balanced Synthetic Benchmark","Expanded Synthetic Benchmark"])
     row=st.columns(4)
     train=int(row[0].number_input("Train %",0,100,70)); validation=int(row[1].number_input("Validation %",0,100,15)); test=int(row[2].number_input("Test %",0,100,15)); seed=int(row[3].number_input("Split seed",0,1000000,42))
     images=registry.images(dataset_id); total=len(images[images.corruption_status=="valid"])

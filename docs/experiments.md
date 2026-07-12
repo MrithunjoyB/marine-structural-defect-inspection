@@ -90,3 +90,9 @@ The full configuration equals the default refined contextual method. Leaderboard
 The controlled comparison uses `SYN-SPECULAR-SUPPRESS-001`, the same 12-image manifest as `SYN-BALANCED-001`, seed 42, IoU threshold 0.10, and mask-overlap threshold 0.25. Compared methods are multi-scale fused, `ABL-FULL`, `ABL-RERANK-ONLY`, and `ABL-RERANK-SPECULAR-SUPPRESS`.
 
 Version 1 is retained as a negative pilot: boundary-contaminated core evidence and a conservative rejection threshold reduced scores but not proposal counts. The corrected distance-transform core measurement is evaluated in version 2 rather than overwriting version 1. Mandatory tolerances are no decrease in crack or pitting recall and no greater than 0.01 absolute decrease in thin-crack mean IoU.
+
+## Expanded Synthetic Validation
+
+`SYN-EXPANDED-VALIDATION-001` v1 freezes commit `71964778475d551444d356bdaa126f06c86bb0ef`, seed 42, IoU 0.10, overlap 0.25, maximum regions 8, and the 100-image `synthetic-expanded` v1.0 test manifest. It compares contour-only, fixed-threshold, multi-scale fused, refined contextual, `ABL-RERANK-ONLY`, and `ABL-RERANK-SPECULAR-SUPPRESS`, yielding exactly 600 unique completed pairs.
+
+The 80-image pilot passed before final generation and remains registered separately. No algorithm setting was changed after test execution. The expanded result is retained as a negative validation because aggregate recall decreased, despite improved specular false-positive behaviour. Full results are in [Expanded Synthetic Benchmark](results/expanded-synthetic-benchmark.md).

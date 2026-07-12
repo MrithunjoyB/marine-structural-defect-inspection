@@ -39,6 +39,8 @@ Split allocation operates on indivisible connected groups. Exact duplicates rema
 
 The **Balanced Synthetic Benchmark** mode uses constrained allocation when ordinary target percentages cannot preserve useful coverage. For the 33-image controlled dataset with seed 42, the resulting counts are 15 train, 6 validation, and 12 test. The test size is deliberately larger than 15% so four template groups remain represented without leakage.
 
+The **Expanded Synthetic Benchmark** mode allocates deterministic five-image template/source groups independently within each category. For `synthetic-expanded` v1.0 and seed 42, each 50-image category contributes exactly 30 train, 10 validation, and 10 test images, producing a 300/100/100 split. The separately registered `synthetic-expanded-pilot` contains the retained 80-image generation gate. Clean images have an explicit `no_anomaly` outcome and no annotation path; anomaly images have non-empty exact binary masks.
+
 Before finalisation, the preview reports image and group counts, positive/clean counts, category distributions, missing categories, and leakage checks. Finalisation is blocked when the test split lacks positive images, clean images, category diversity, or required benchmark categories. An override requires an explicit warning acknowledgement.
 
 ## Safe Deletion

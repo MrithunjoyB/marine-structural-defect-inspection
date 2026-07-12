@@ -168,6 +168,23 @@ def method_summary(results):
     return pd.DataFrame(rows)
 
 
+def pairing_audit(results,expected_image_ids,expected_methods):
+    """Audit an experiment matrix without changing or repairing stored rows."""
+    expected={(str(image_id),str(method)) for image_id in expected_image_ids for method in expected_methods}
+    observed=[(str(row.image_id),str(row.method)) for _,row in results.iterrows()]
+    observed_set=set(observed)
+    return {
+        "expected_rows":len(expected),
+        "actual_rows":len(observed),
+        "unique_pairs":len(observed_set),
+        "missing_pairs":sorted(expected-observed_set),
+        "unexpected_pairs":sorted(observed_set-expected),
+        "duplicate_pair_count":len(observed)-len(observed_set),
+        "failed_rows":int((results.run_status!="completed").sum()) if "run_status" in results else 0,
+        "complete":observed_set==expected and len(observed)==len(expected) and ("run_status" not in results or bool((results.run_status=="completed").all())),
+    }
+
+
 def _sqlite(value):
     if value is None:return None
     if isinstance(value,(bool,np.bool_)):return int(value)

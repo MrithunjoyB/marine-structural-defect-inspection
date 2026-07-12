@@ -118,6 +118,8 @@ Full tables are available in [Controlled Benchmark Results](docs/results/control
 
 `ABL-RERANK-SPECULAR-SUPPRESS` adds an opt-in, candidate-level optical likelihood model and conservative crack/pitting safeguards to rerank-only. In `SYN-SPECULAR-SUPPRESS-001` version 2 (12 images; 48 rows), specular-highlight false proposals decreased from 3.0 to 2.0 per image. Thin-crack Top-1 recall, proposal recall, and mean IoU remained 1.0000, 1.0000, and 0.9092; pitting recall remained 0.7000; normal-texture false proposals remained zero. Version 1 is retained as a negative pilot in which the initial threshold produced no reduction. The version 2 result meets the predeclared controlled criteria but is too small and synthetic to support a general claim. See [Specular Suppression](docs/results/specular-suppression.md).
 
+The frozen method was subsequently evaluated on `synthetic-expanded` v1.0: 500 deterministic images, 10 balanced categories, and a leakage-free 100-image test split. In `SYN-EXPANDED-VALIDATION-001` v1, suppression reduced specular false proposals from 2.9 to 1.5 per image and preserved crack and pitting metrics, but lost one weld-disturbance image; aggregate recall fell from 0.82 to 0.80. The predeclared validation therefore **failed**, and no test-set retuning was performed. See [Expanded Synthetic Benchmark](docs/results/expanded-synthetic-benchmark.md).
+
 ## Interface and Experimental Outputs
 
 The repository does not currently include a complete, publication-ready interface figure set. Future documentation may add licensed or generated figures for the system overview, feature maps, proposal masks, dataset dashboard, paired comparison, ablation leaderboard, and representative success and failure cases.
@@ -170,7 +172,7 @@ Register such data through Research Dataset Intake, preserve source and licence 
 
 **Methodological limitations.** Classical and contextual proposals identify image irregularities; they do not provide certified diagnosis. Context rings may cross structural boundaries, and matching thresholds affect measured performance. Specular highlights remain a major false-positive mode, while pitting recall remains incomplete.
 
-**Benchmark limitations.** The controlled benchmark is small and synthetic. Only four categories occur in the balanced test split, and descriptive confidence intervals cannot support broad significance claims.
+**Benchmark limitations.** Both controlled benchmarks are synthetic. The expanded test improves category and parameter coverage but still reflects generator assumptions; descriptive confidence intervals do not establish real-world validity.
 
 **Data limitations.** No real marine-field validation has been completed. Expert-reviewed, licensed structural datasets are not yet represented in the public repository.
 
@@ -181,15 +183,15 @@ Register such data through Research Dataset Intake, preserve source and licence 
 ### Immediate
 
 - retain `ABL-RERANK-ONLY` as an experimental candidate;
-- expand the controlled evaluation of `ABL-RERANK-SPECULAR-SUPPRESS` across seeds, reflection geometries, and bright anomaly structures;
+- investigate the recorded weld-disturbance suppression failure using development data only;
 - verify preservation of pitting recall and thin-crack localisation; and
 - repeat paired controlled evaluation.
 
 ### Benchmark Expansion
 
-- generate a substantially larger controlled benchmark;
-- add corrosion-like, weld, coating, blur, illumination, reflection, and mixed-anomaly conditions; and
-- evaluate multiple seeds and perturbation levels.
+- evaluate additional generator seeds and independently implemented synthetic sources;
+- add corrosion-like, coating, mixed-anomaly, and acquisition-specific conditions; and
+- quantify synthetic-generator bias before further algorithm selection.
 
 ### Real-World Validation
 
