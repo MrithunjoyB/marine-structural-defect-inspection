@@ -288,6 +288,9 @@ def main() -> None:
                 removed[3].metric("Split operations", diagnostics.split_operations)
                 removed[4].metric("Merged", diagnostics.merged_candidates)
                 st.json(diagnostics.rejection_reasons)
+                if diagnostics.specular_diagnostics:
+                    st.caption("Candidate specular-suppression diagnostics")
+                    st.dataframe(pd.json_normalize(diagnostics.specular_diagnostics),width="stretch",hide_index=True)
                 for stage, path in diagnostics.stage_overlay_paths.items():
                     st.image(path.as_posix(), caption=f"{stage.replace('_', ' ').title()}", width="stretch")
             st.caption("Algorithm comparison")

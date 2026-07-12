@@ -21,6 +21,7 @@ class AblationDefinition:
 
 
 FULL=AblationConfig()
+RERANK_ONLY=replace(FULL,multi_scale_fusion=False)
 ABLATION_CONFIGS=(
     AblationDefinition("ABL-FULL","Full refined contextual method",(),FULL),
     AblationDefinition("ABL-NO-TEXTURE","Without local texture context",("local_texture_context",),replace(FULL,local_texture_context=False)),
@@ -31,7 +32,8 @@ ABLATION_CONFIGS=(
     AblationDefinition("ABL-NO-BORDER","Without border penalty",("border_penalty",),replace(FULL,border_penalty=False)),
     AblationDefinition("ABL-NO-COHERENCE","Without coherence term",("coherence_term",),replace(FULL,coherence_term=False)),
     AblationDefinition("ABL-FUSED-ONLY","Fused features without contextual reranking",("contextual_contrast",),replace(FULL,contextual_contrast=False)),
-    AblationDefinition("ABL-RERANK-ONLY","Contextual reranking only",("multi_scale_fusion",),replace(FULL,multi_scale_fusion=False)),
+    AblationDefinition("ABL-RERANK-ONLY","Contextual reranking only",("multi_scale_fusion",),RERANK_ONLY),
+    AblationDefinition("ABL-RERANK-SPECULAR-SUPPRESS","Reranking with specular suppression",("multi_scale_fusion",),replace(RERANK_ONLY,specular_suppression=True)),
     AblationDefinition("ABL-MINIMAL","Minimal baseline configuration",("contextual_contrast","stability","multi_scale_fusion","mask_refinement"),replace(FULL,contextual_contrast=False,stability=False,multi_scale_fusion=False,mask_refinement=False)),
 )
 CONFIG_BY_ID={item.configuration_id:item for item in ABLATION_CONFIGS}

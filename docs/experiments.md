@@ -84,3 +84,9 @@ The generated dataset and SQLite stores are runtime artefacts and are not commit
 Ablation plans derive from a validated source experiment. Execution is blocked when source rows contain duplicates, mixed versions, dataset/split mismatch, or a selected-image set that cannot be reproduced. Each configuration stores enabled components, thresholds and weights, seed, code commit, manifest hash, and matching thresholds.
 
 The full configuration equals the default refined contextual method. Leaderboard differences are empirical benchmark observations, not causal proof of component value.
+
+## Specular-Suppression Protocol
+
+The controlled comparison uses `SYN-SPECULAR-SUPPRESS-001`, the same 12-image manifest as `SYN-BALANCED-001`, seed 42, IoU threshold 0.10, and mask-overlap threshold 0.25. Compared methods are multi-scale fused, `ABL-FULL`, `ABL-RERANK-ONLY`, and `ABL-RERANK-SPECULAR-SUPPRESS`.
+
+Version 1 is retained as a negative pilot: boundary-contaminated core evidence and a conservative rejection threshold reduced scores but not proposal counts. The corrected distance-transform core measurement is evaluated in version 2 rather than overwriting version 1. Mandatory tolerances are no decrease in crack or pitting recall and no greater than 0.01 absolute decrease in thin-crack mean IoU.

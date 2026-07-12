@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
@@ -31,6 +31,11 @@ class AblationConfig:
     internal_boundary_edge: bool = True
     border_penalty: bool = True
     coherence_term: bool = True
+    specular_suppression: bool = False
+    specular_penalty_weight: float = 0.65
+    specular_rejection_threshold: float = 0.50
+    crack_safeguard_weight: float = 0.90
+    pitting_safeguard_weight: float = 0.65
 
 
 @dataclass(frozen=True)
@@ -51,6 +56,7 @@ class ProposalDiagnostics:
     score_distribution: tuple[float, ...]
     rejection_reasons: dict[str, int]
     stage_overlay_paths: dict[str, Path]
+    specular_diagnostics: tuple[dict[str, object], ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         scores = np.asarray(self.score_distribution, dtype=float)
@@ -71,6 +77,8 @@ class ProposalDiagnostics:
             "Minimum score": round(float(scores.min()), 1) if scores.size else 0.0,
             "Median score": round(float(np.median(scores)), 1) if scores.size else 0.0,
             "Maximum score": round(float(scores.max()), 1) if scores.size else 0.0,
+            "Rejection reasons": dict(self.rejection_reasons),
+            "Specular diagnostics": list(self.specular_diagnostics),
         }
 
 
@@ -106,6 +114,7 @@ class RegionProposal:
     mask_path: Path
     raw_mask_path: Path
     context_mask_path: Path
+    specular_diagnostics: dict[str, object] = field(default_factory=dict)
 
     def to_row(self) -> dict[str, object]:
         x1, y1, x2, y2 = self.bbox
@@ -127,6 +136,10 @@ class RegionProposal:
             "Boundary Smoothness": round(self.boundary_smoothness, 3),
             "Priority Score": self.priority.score, "Priority Label": self.priority.label,
             "Dominant Features": " + ".join(self.dominant_features), "Why Selected": self.explanation,
+            "Specular Likelihood": round(float(self.specular_diagnostics.get("specular_likelihood", 0.0)), 3),
+            "Specular Penalty": round(float(self.specular_diagnostics.get("penalty_applied", 0.0)), 3),
+            "Specular Decision": self.specular_diagnostics.get("decision", "disabled"),
+            "Specular Safeguard": self.specular_diagnostics.get("safeguard_activation", "none"),
         }
 
 
@@ -220,8 +233,9 @@ def propose_regions(
             continue
         raw_metrics.append((candidate, metrics))
     calibrated = _robust_calibrate([metrics for _, metrics in raw_metrics])
-    scored: list[tuple[float, _Candidate, dict[str, float], float, float, dict[str, float]]] = []
-    for (candidate, metrics), normalized in zip(raw_metrics, calibrated):
+    scored: list[tuple[float, _Candidate, dict[str, float], float, float, dict[str, float], dict[str, object]]] = []
+    specular_records: list[dict[str, object]] = []
+    for candidate_index, ((candidate, metrics), normalized) in enumerate(zip(raw_metrics, calibrated), 1):
         evidence = {
             "local_texture_contrast": normalized["local_texture_contrast"] if ablation.contextual_contrast and ablation.texture_features and ablation.local_texture_context else 0,
             "local_colour_contrast": normalized["local_colour_contrast"] if ablation.contextual_contrast and ablation.colour_features and ablation.local_colour_context else 0,
@@ -241,14 +255,24 @@ def propose_regions(
             rejection_reasons["tiny_below_exceptional_evidence"] = rejection_reasons.get("tiny_below_exceptional_evidence", 0) + 1
             continue
         if ablation.border_penalty: score *= 1.0 - 0.55 * metrics["border_penalty"]
-        scored.append((score, candidate, metrics, evidence_score, reliability_score, contributions))
+        before_specular_score=score
+        specular=_specular_evidence(image,candidate.mask,candidate.bbox,metrics) if ablation.specular_suppression else {"specular_likelihood":0.0,"structural_strength":0.0,"crack_safeguard":0.0,"pitting_safeguard":0.0,"components":{}}
+        specular.update({"candidate_id":f"C{candidate_index:03d}","before_priority_score":round(float(before_specular_score),6),"penalty_applied":0.0,"after_priority_score":round(float(before_specular_score),6),"decision":"disabled","rejection_reason":""})
+        if ablation.specular_suppression:
+            safeguard=max(ablation.crack_safeguard_weight*float(specular["crack_safeguard"]),ablation.pitting_safeguard_weight*float(specular["pitting_safeguard"])); effective=float(specular["specular_likelihood"])*(1.0-min(safeguard,.95)); penalty=min(effective*ablation.specular_penalty_weight,.85); score*=1.0-penalty
+            specular["effective_specular_likelihood"]=round(effective,6); specular["penalty_applied"]=round(penalty,6); specular["after_priority_score"]=round(float(score),6); specular["safeguard_activation"]="crack" if float(specular["crack_safeguard"])>=float(specular["pitting_safeguard"]) and float(specular["crack_safeguard"])>.2 else ("pitting" if float(specular["pitting_safeguard"])>.2 else "none"); specular["decision"]="penalized" if penalty>.01 else "retained"
+            if effective>=ablation.specular_rejection_threshold and float(specular["structural_strength"])<.42:
+                specular["decision"]="rejected"; specular["rejection_reason"]="high_specular_likelihood"; rejection_reasons["high_specular_likelihood"]=rejection_reasons.get("high_specular_likelihood",0)+1; specular_records.append(specular); continue
+        else: specular["safeguard_activation"]="none"
+        if ablation.specular_suppression:specular_records.append(specular)
+        scored.append((score, candidate, metrics, evidence_score, reliability_score, contributions, specular))
     scored.sort(key=lambda item: item[0], reverse=True)
     ranked_count = len(scored)
     scored = scored[:max_regions]
 
     proposals: list[RegionProposal] = []
     combined_mask = np.zeros((height, width), np.uint8)
-    for index, (score, candidate, metrics, evidence_score, reliability_score, contributions) in enumerate(scored, 1):
+    for index, (score, candidate, metrics, evidence_score, reliability_score, contributions, specular) in enumerate(scored, 1):
         region_id = f"R{index:03d}"
         mask_path = MASK_DIR / f"{image_stem}_{region_id}_mask.png"
         raw_mask_path = MASK_DIR / f"{image_stem}_{region_id}_raw_mask.png"
@@ -277,7 +301,7 @@ def propose_regions(
             metrics["local_entropy_contrast"], metrics["internal_vs_boundary_edge_ratio"], evidence_score,
             reliability_score, metrics["coherence_score"], metrics["border_penalty"], metrics["area_reduction"],
             metrics["boundary_smoothness"], contributions, dominant, explanation, priority, mask_path,
-            raw_mask_path, context_mask_path,
+            raw_mask_path, context_mask_path, specular,
         ))
 
     combined_mask_path = MASK_DIR / f"{image_stem}_combined_mask.png"
@@ -299,7 +323,7 @@ def propose_regions(
         len(proposals), rejection_reasons.get("area", 0),
         rejection_reasons.get("border_band", 0) + rejection_reasons.get("border_evidence", 0),
         len(overlap_rejected), split_operations, merged_count, threshold,
-        tuple(p.priority.score for p in proposals), rejection_reasons, stage_paths,
+        tuple(p.priority.score for p in proposals), rejection_reasons, stage_paths, tuple(specular_records),
     )
     assert diagnostics.after_merging <= diagnostics.after_splitting
     assert diagnostics.final_count <= max_regions
@@ -602,6 +626,31 @@ def _region_metrics(image: np.ndarray, fm: FeatureMaps, mask: np.ndarray, bbox: 
         "gradient_contrast": min(abs(gradient_inside-gradient_ring)/100,1.0),
         "geometric_irregularity": irregularity, "novelty": min((abs(texture_inside-texture_ring)+np.linalg.norm(candidate_lab-ring_lab))/100,1.0),
     }
+
+
+def _specular_evidence(image:np.ndarray,mask:np.ndarray,bbox:tuple[int,int,int,int],metrics:dict[str,float])->dict[str,object]:
+    """Return bounded optical/structural evidence without using labels or filenames."""
+    selected=mask>0
+    if not np.any(selected):
+        return {"specular_likelihood":0.0,"structural_strength":0.0,"crack_safeguard":0.0,"pitting_safeguard":0.0,"components":{}}
+    pixels=image[selected].astype(np.float32); hsv=cv2.cvtColor(image,cv2.COLOR_BGR2HSV); lab=cv2.cvtColor(image,cv2.COLOR_BGR2LAB).astype(np.float32); gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+    value=hsv[...,2][selected].astype(np.float32)/255; saturation=hsv[...,1][selected].astype(np.float32)/255
+    bright_low_saturation=float(np.mean((value>.88)&(saturation<.22))); high_value=float(np.mean(value>.82)); low_saturation=float(1.0-np.mean(saturation)); channel_similarity=float(1.0-np.mean(np.max(pixels,axis=1)-np.min(pixels,axis=1))/255)
+    chroma=np.linalg.norm(lab[selected][:,1:]-128.0,axis=1); low_chroma=float(1.0-min(np.mean(chroma)/75,1.0)); mean_value=float(np.mean(value)); intensity_smoothness=float(1.0-min(np.std(gray[selected])/64,1.0)); low_entropy=float(1.0-min(metrics.get("entropy",0.0),1.0))
+    ring=_context_ring(mask)>0; ring_mean=float(np.mean(gray[ring]))/255 if np.any(ring) else mean_value; brightness_contrast=float(np.clip(mean_value-ring_mean,0,1))
+    compactness=float(np.clip(.55*metrics.get("boundary_smoothness",0.0)+.45*(1-metrics.get("geometric_irregularity",1.0)),0,1)); optical=float(np.clip(.22*bright_low_saturation+.12*high_value+.12*low_saturation+.12*channel_similarity+.12*low_chroma+.10*intensity_smoothness+.08*low_entropy+.07*brightness_contrast+.05*compactness,0,1))
+    distance=cv2.distanceTransform((mask>0).astype(np.uint8),cv2.DIST_L2,5); core_selected=distance>=max(float(distance.max())*.55,1.0)
+    if np.count_nonzero(core_selected)<8: core_selected=selected
+    core_texture=float(min(np.std(gray[core_selected])/64,1.0)); core_gradient=cv2.Sobel(gray,cv2.CV_32F,1,0,ksize=3)**2+cv2.Sobel(gray,cv2.CV_32F,0,1,ksize=3)**2; core_gradient=float(min(np.mean(np.sqrt(core_gradient)[core_selected])/128,1.0))
+    brightness_gate=float(np.clip(.55*mean_value+.45*high_value,0,1)); structural_strength=float(np.clip(max(core_texture,core_gradient,metrics.get("geometric_irregularity",0.0)),0,1)); likelihood=float(np.clip(optical*(.30+.70*brightness_gate)*(.65+.35*(1-structural_strength)),0,1))
+    x1,y1,x2,y2=bbox; width=max(x2-x1,1); height=max(y2-y1,1); occupancy=float(cv2.countNonZero(mask)/(width*height)); contours,_=cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE); component_count=max(cv2.connectedComponents((mask>0).astype(np.uint8))[0]-1,1)
+    rotated_aspect=1.0
+    if contours:
+        (_, _),(rw,rh),_=cv2.minAreaRect(max(contours,key=cv2.contourArea)); rotated_aspect=max(rw/max(rh,1e-6),rh/max(rw,1e-6))
+    aspect=max(width/height,height/width,rotated_aspect); elongation=float(np.clip((aspect-2.5)/5,0,1)); thin_geometry=float(np.clip((.42-occupancy)/.32,0,1)); crack_safeguard=float(np.clip(max(elongation,.65*elongation+.35*thin_geometry)*(.65+.35*metrics.get("scale_agreement",0.0)),0,1))
+    multi_component=float(np.clip((component_count-1)/4,0,1)); irregular=float(metrics.get("geometric_irregularity",0.0)); texture=float(max(core_texture,metrics.get("local_texture_contrast",0.0))); pitting_safeguard=float(np.clip(max(multi_component,irregular*texture),0,1))
+    components={"bright_low_saturation_occupancy":bright_low_saturation,"high_value_occupancy":high_value,"low_saturation":low_saturation,"rgb_channel_similarity":channel_similarity,"low_lab_chroma":low_chroma,"mean_value":mean_value,"intensity_smoothness":intensity_smoothness,"low_entropy":low_entropy,"brightness_context_contrast":brightness_contrast,"compactness":compactness,"core_texture":core_texture,"core_gradient":core_gradient,"structural_strength":structural_strength,"aspect_ratio":aspect,"mask_occupancy":occupancy,"component_count":component_count}
+    return {"specular_likelihood":round(likelihood,6),"structural_strength":round(structural_strength,6),"crack_safeguard":round(crack_safeguard,6),"pitting_safeguard":round(pitting_safeguard,6),"components":{key:round(float(value),6) for key,value in components.items()}}
 
 
 def _valid_image_area(image: np.ndarray, margin_ratio: float) -> np.ndarray:

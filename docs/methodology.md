@@ -89,6 +89,12 @@ The baseline definitions are executed on identical registered images for paired 
 
 `AblationConfig` provides opt-in switches for feature families, local contextual terms, stability, internal/boundary-edge evidence, border penalty, coherence, multi-scale fusion, merging, and refinement. `ABL-FULL` equals the normal default configuration. Ablation configurations reuse the proposal pipeline and store stable IDs and reproducibility snapshots; they are not independent reimplementations.
 
+### Experimental Specular Suppression
+
+`ABL-RERANK-SPECULAR-SUPPRESS` inherits `ABL-RERANK-ONLY` and enables a continuous candidate-level specular likelihood. The score combines high-value/low-saturation occupancy, Lab chroma, RGB channel agreement, intensity smoothness, entropy, candidate-to-context brightness, compactness, and eroded-core texture/gradient evidence. It does not use category labels, filenames, or ground truth.
+
+The effective likelihood is reduced by two structural safeguards. The crack safeguard uses rotated elongation, thin mask occupancy, and scale agreement. The pitting safeguard uses multiple connected components and irregular, textured core evidence. The policy first applies a reproducible ranking penalty and rejects only candidates above the configured effective-likelihood threshold with weak structural evidence. Diagnostics retain component values, safeguards, before/after scores, decision, and rejection reason. Suppression is disabled by default and does not alter existing methods.
+
 ## Implementation Boundaries
 
 The proposal method does not estimate structural capacity, defect severity, material loss, or repair priority. Reported priority is a visual review order. Domain claims require licensed real data, expert ground truth, calibrated acquisition, and an appropriate engineering validation protocol.

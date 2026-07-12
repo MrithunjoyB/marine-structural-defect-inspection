@@ -114,6 +114,10 @@ Strict paired analysis finds the multi-scale fused and refined contextual method
 
 Full tables are available in [Controlled Benchmark Results](docs/results/controlled-benchmark.md) and [Ablation Study Results](docs/results/ablation-study.md).
 
+### Specular-Suppression Experiment
+
+`ABL-RERANK-SPECULAR-SUPPRESS` adds an opt-in, candidate-level optical likelihood model and conservative crack/pitting safeguards to rerank-only. In `SYN-SPECULAR-SUPPRESS-001` version 2 (12 images; 48 rows), specular-highlight false proposals decreased from 3.0 to 2.0 per image. Thin-crack Top-1 recall, proposal recall, and mean IoU remained 1.0000, 1.0000, and 0.9092; pitting recall remained 0.7000; normal-texture false proposals remained zero. Version 1 is retained as a negative pilot in which the initial threshold produced no reduction. The version 2 result meets the predeclared controlled criteria but is too small and synthetic to support a general claim. See [Specular Suppression](docs/results/specular-suppression.md).
+
 ## Interface and Experimental Outputs
 
 The repository does not currently include a complete, publication-ready interface figure set. Future documentation may add licensed or generated figures for the system overview, feature maps, proposal masks, dataset dashboard, paired comparison, ablation leaderboard, and representative success and failure cases.
@@ -177,7 +181,7 @@ Register such data through Research Dataset Intake, preserve source and licence 
 ### Immediate
 
 - retain `ABL-RERANK-ONLY` as an experimental candidate;
-- develop specular-highlight suppression;
+- expand the controlled evaluation of `ABL-RERANK-SPECULAR-SUPPRESS` across seeds, reflection geometries, and bright anomaly structures;
 - verify preservation of pitting recall and thin-crack localisation; and
 - repeat paired controlled evaluation.
 
