@@ -32,6 +32,7 @@ from experiment_tracking import (
 )
 from research_dataset import DatasetRegistry, FINAL_STATUS
 from registered_experiment import RegisteredExperimentStore, execute_plan, load_ground_truth, load_plan, method_summary, selected_images
+from research_analysis_ui import render_research_analysis
 
 
 RECALL_CHART_COLUMNS = {
@@ -83,10 +84,10 @@ def render_research_evaluation(
         store, image_name, annotations, proposal_result, feature_maps,
         review_start_time, review_completion_time,
     )
-    automatic_store=RegisteredExperimentStore(output_dir / "registered_experiment_results.sqlite3")
+    automatic_store=RegisteredExperimentStore(output_dir / "registered_experiment_results.sqlite3"); registry=DatasetRegistry(output_dir.parent/"research_data")
     _render_registered_dataset_experiment(output_dir.parent, preprocessing_settings or {},automatic_store)
     st.divider()
-    _render_dashboard_and_management(store,automatic_store)
+    _render_dashboard_and_management(store,automatic_store,registry)
     st.divider()
     _render_legacy_migration(store, legacy_json_path)
 
@@ -264,13 +265,12 @@ def _render_recording(store, image_name, annotations, proposal_result, feature_m
                 st.error(f"Save cancelled: {error}")
 
 
-def _render_dashboard_and_management(store: ExperimentStore,automatic_store=None) -> None:
+def _render_dashboard_and_management(store: ExperimentStore,automatic_store=None,registry=None) -> None:
     st.markdown("### Manage Experiments")
     all_records = store.dataframe()
     automatic=automatic_store.dataframe() if automatic_store else pd.DataFrame()
     if not automatic.empty:
-        st.caption("Automatically evaluated registered-dataset records")
-        st.dataframe(automatic,width="stretch",hide_index=True)
+        render_research_analysis(automatic_store,registry)
     if all_records.empty:
         if automatic.empty: st.info("No SQLite experiment records are stored yet.")
         else: st.info("Automatic results are shown above; no separate human-review records are stored.")

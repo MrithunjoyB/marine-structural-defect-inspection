@@ -133,8 +133,8 @@ def render_matches(image,truth,proposal_masks,details,path):
     Path(path).parent.mkdir(parents=True,exist_ok=True); cv2.imwrite(str(path),overlay)
 
 
-def execute_plan(registry,store,plan_id,version=1,iou_threshold=.1,mask_overlap_threshold=.25,mode="resume",progress=None,cancel=None):
-    plan=load_plan(registry,plan_id); images=selected_images(registry,plan); methods=plan["configuration"].get("proposal_methods",list(METHOD_NAMES)); pairs=[(row,method) for _,row in images.iterrows() for method in methods]; completed=store.completed_pairs(plan_id,version); failed=store.failed_pairs(plan_id,version)
+def execute_plan(registry,store,plan_id,version=1,iou_threshold=.1,mask_overlap_threshold=.25,mode="resume",progress=None,cancel=None,ablation_config=None,methods_override=None):
+    plan=load_plan(registry,plan_id); images=selected_images(registry,plan); methods=list(methods_override or plan["configuration"].get("proposal_methods",list(METHOD_NAMES))); pairs=[(row,method) for _,row in images.iterrows() for method in methods]; completed=store.completed_pairs(plan_id,version); failed=store.failed_pairs(plan_id,version)
     if mode=="cancel" and completed: raise ValueError("Completed image-method pairs already exist; choose resume, overwrite, or create a new version")
     if mode=="retry_failed": pairs=[pair for pair in pairs if (pair[0].image_id,pair[1]) in failed]
     elif mode=="resume": pairs=[pair for pair in pairs if (pair[0].image_id,pair[1]) not in completed]
@@ -145,9 +145,11 @@ def execute_plan(registry,store,plan_id,version=1,iou_threshold=.1,mask_overlap_
         if cancel and cancel(): store.set_execution(plan_id,version,"cancelled",done,total); cancelled=True; break
         pair_start=time.perf_counter()
         try:
-            if row.image_id not in cache:
-                image=cv2.imread(str(registry.root/"raw"/row.dataset_id/row.stored_filename)); truth=load_ground_truth(row); maps=extract_feature_maps(image); stem=f"registered_{plan_id[:8]}_{row.image_id[:8]}"; result=propose_regions(image,maps,stem,max_regions=int(plan["configuration"].get("maximum_regions") or 8)); cache[row.image_id]=(image,truth,maps,result)
-            image,truth,maps,result=cache[row.image_id]; masks=method_masks(method,maps,result); metrics=match_proposals(masks,truth,iou_threshold,mask_overlap_threshold); visual=registry.root/"reports"/row.dataset_id/"experiments"/plan["experiment_id"]/f"v{version}_{row.image_id}_{method.replace(' ','_')}.png"; render_matches(image,truth,masks,metrics["details"],visual)
+            cache_key=(row.image_id,method if ablation_config is not None else "shared")
+            if cache_key not in cache:
+                image=cv2.imread(str(registry.root/"raw"/row.dataset_id/row.stored_filename)); truth=load_ground_truth(row); maps=extract_feature_maps(image); stem=f"registered_{plan_id[:8]}_{row.image_id[:8]}_{str(method)[:12].replace(' ','_')}"; result=propose_regions(image,maps,stem,max_regions=int(plan["configuration"].get("maximum_regions") or 8),ablation=ablation_config)
+                cache[cache_key]=(image,truth,maps,result)
+            image,truth,maps,result=cache[cache_key]; evaluation_method="refined contextual method" if ablation_config is not None else method; masks=method_masks(evaluation_method,maps,result); metrics=match_proposals(masks,truth,iou_threshold,mask_overlap_threshold); visual=registry.root/"reports"/row.dataset_id/"experiments"/plan["experiment_id"]/f"v{version}_{row.image_id}_{method.replace(' ','_')}.png"; render_matches(image,truth,masks,metrics["details"],visual)
             record=AutomaticResult(str(uuid4()),plan_id,plan["experiment_id"],version,row.image_id,row.original_filename,method,AUTOMATIC_REVIEW_STATUS,"completed",len(masks),metrics["first_true_anomaly_proposal_rank"],metrics["top_1_hit"],metrics["top_3_hit"],metrics["top_5_hit"],metrics["top_8_hit"],metrics["true_positive_proposals"],metrics["false_positive_proposals"],metrics["false_negative_anomalies"],metrics["proposal_precision"],metrics["proposal_recall"],metrics["mean_iou"],metrics["best_iou"],time.perf_counter()-pair_start,str(visual),json.dumps(metrics["details"]),"",datetime.now().isoformat(timespec="seconds")); store.save(record,overwrite=mode in {"overwrite","retry_failed"}); done+=1
         except Exception as error:
             errors+=1; record=AutomaticResult(str(uuid4()),plan_id,plan["experiment_id"],version,row.image_id,row.original_filename,method,AUTOMATIC_REVIEW_STATUS,"failed",0,None,None,None,None,None,0,0,0,0.,None,0.,0.,time.perf_counter()-pair_start,"","[]",str(error),datetime.now().isoformat(timespec="seconds")); store.save(record,overwrite=True)

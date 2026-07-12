@@ -25,6 +25,12 @@ class AblationConfig:
     multi_scale_fusion: bool = True
     region_merging: bool = True
     mask_refinement: bool = True
+    local_texture_context: bool = True
+    local_colour_context: bool = True
+    local_entropy_context: bool = True
+    internal_boundary_edge: bool = True
+    border_penalty: bool = True
+    coherence_term: bool = True
 
 
 @dataclass(frozen=True)
@@ -206,7 +212,7 @@ def propose_regions(
         bw=candidate.bbox[2]-candidate.bbox[0]; bh=candidate.bbox[3]-candidate.bbox[1]
         bottom_touch = candidate.bbox[3] >= height - max(4, int(height * border_margin * 1.5))
         contextual_peak = max(metrics["local_texture_contrast"], metrics["local_colour_contrast"], metrics["local_entropy_contrast"])
-        if metrics["border_penalty"] > .55 or (bottom_touch and contextual_peak < .35):
+        if ablation.border_penalty and (metrics["border_penalty"] > .55 or (bottom_touch and contextual_peak < .35)):
             rejection_reasons["border_evidence"] = rejection_reasons.get("border_evidence", 0) + 1
             continue
         if cv2.countNonZero(candidate.mask) < int(min_pixels * 1.5) and contextual_peak < .45:
@@ -217,16 +223,16 @@ def propose_regions(
     scored: list[tuple[float, _Candidate, dict[str, float], float, float, dict[str, float]]] = []
     for (candidate, metrics), normalized in zip(raw_metrics, calibrated):
         evidence = {
-            "local_texture_contrast": normalized["local_texture_contrast"] if ablation.contextual_contrast and ablation.texture_features else 0,
-            "local_colour_contrast": normalized["local_colour_contrast"] if ablation.contextual_contrast and ablation.colour_features else 0,
-            "local_entropy_contrast": normalized["local_entropy_contrast"] if ablation.contextual_contrast and ablation.entropy_features else 0,
-            "edge_concentration": normalized["internal_vs_boundary_edge_ratio"] if ablation.edge_features else 0,
+            "local_texture_contrast": normalized["local_texture_contrast"] if ablation.contextual_contrast and ablation.texture_features and ablation.local_texture_context else 0,
+            "local_colour_contrast": normalized["local_colour_contrast"] if ablation.contextual_contrast and ablation.colour_features and ablation.local_colour_context else 0,
+            "local_entropy_contrast": normalized["local_entropy_contrast"] if ablation.contextual_contrast and ablation.entropy_features and ablation.local_entropy_context else 0,
+            "edge_concentration": normalized["internal_vs_boundary_edge_ratio"] if ablation.edge_features and ablation.internal_boundary_edge else 0,
             "gradient_contrast": normalized["gradient_contrast"] if ablation.edge_features else 0,
             "geometric_irregularity": normalized["geometric_irregularity"],
         }
         reliability = {"perturbation_stability": metrics["mask_stability"], "connectedness": metrics["connectedness"],
                        "boundary_smoothness": metrics["boundary_smoothness"], "scale_agreement": metrics["scale_agreement"],
-                       "segmentation_coherence": metrics["coherence_score"]}
+                       "segmentation_coherence": metrics["coherence_score"] if ablation.coherence_term else 0}
         evidence_score, reliability_score, score, contributions = score_architecture(
             evidence, reliability, metrics["area_relevance"], normalized["novelty"]
         )
@@ -234,7 +240,7 @@ def propose_regions(
         if cv2.countNonZero(candidate.mask) / image_area < .001 and evidence_score < 70 and not compact_exception:
             rejection_reasons["tiny_below_exceptional_evidence"] = rejection_reasons.get("tiny_below_exceptional_evidence", 0) + 1
             continue
-        score *= 1.0 - 0.55 * metrics["border_penalty"]
+        if ablation.border_penalty: score *= 1.0 - 0.55 * metrics["border_penalty"]
         scored.append((score, candidate, metrics, evidence_score, reliability_score, contributions))
     scored.sort(key=lambda item: item[0], reverse=True)
     ranked_count = len(scored)

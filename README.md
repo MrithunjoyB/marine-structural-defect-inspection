@@ -270,6 +270,18 @@ Automatic rows use `review_status = automatically_evaluated` and remain separate
 
 Experiment plans may select anomaly-present images, clean images, specific anomaly or clean artefact types, or a balanced positive/negative subset. Clean-only runs are labeled **False-positive robustness evaluation**; precision and false-proposal metrics remain valid, while recall is explicitly undefined and empty recall charts are suppressed.
 
+### Research Analysis Browser
+
+Manage Experiments provides persistent free-text search, categorical and numeric filters, quick comparisons, sorting, column presets, selected-image method comparison, expandable visual evidence, and filtered CSV/JSON exports. Filters use stable Streamlit session keys and remain active across reruns and page navigation. Category-wise Evaluation separates anomaly recall from clean false-alarm robustness and never substitutes zero for undefined recall.
+
+**Multi-scale Fused vs Refined Contextual** pairs methods on identical experiment images, reports per-image metric differences and category-specific win/tie/loss counts, and generates a conservative interpretation. Deterministic bootstrap intervals are descriptive; the interface warns that controlled synthetic results do not establish real-world marine inspection performance.
+
+### Ablation Study
+
+The ablation framework defines stable IDs for the full refined method and removals of texture, colour, entropy, stability, boundary-edge, border, coherence, contextual reranking, multi-scale fusion, and mask refinement components. Configurations are thin `AblationConfig` overlays on the existing proposal pipeline. The full configuration equals the normal default exactly, so existing experiments and proposal behavior are unchanged.
+
+Each ablation snapshot records enabled components, thresholds, weights, seed, code commit, dataset manifest hash, experiment identity, selected images, and matching thresholds. Comparisons require aligned manifests, images, splits, thresholds, and seeds. Leaderboard and contribution tables describe empirical benchmark differences rather than causal effects.
+
 Development/Test experiments may use local development images and unknown ground truth and remain excluded from final summaries by default. Final Research Evaluation requires a registered dataset, verified or reviewer-estimated ground truth, source/licence metadata, and a configuration snapshot; unknown provenance or licence is blocked unless explicitly overridden with a warning.
 
 ### Synthetic Intake

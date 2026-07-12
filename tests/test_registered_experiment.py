@@ -12,6 +12,7 @@ from registered_experiment import (
     load_ground_truth, load_plan, mask_iou, match_proposals, method_summary, selected_images,
 )
 from research_dataset import DatasetRegistry, register_synthetic_benchmark
+from ablation_study import ABLATION_CONFIGS,ablation_leaderboard,execute_ablation_plan
 
 
 class MatchingTests(unittest.TestCase):
@@ -39,6 +40,10 @@ class RegisteredExecutionSmokeTests(unittest.TestCase):
         cls.store=RegisteredExperimentStore(Path(cls.temp.name)/"automatic.sqlite3"); cls.results=execute_plan(cls.registry,cls.store,cls.plan_id,1,.1,.25,"resume")
     @classmethod
     def tearDownClass(cls): cls.temp.cleanup()
+
+    def test_ablation_persistence_resume_and_leaderboard(self):
+        definitions=ABLATION_CONFIGS[:2]; first=execute_ablation_plan(self.registry,self.store,self.plan_id,definitions,2,.1,.25,"resume"); self.assertEqual(len(first),6); second=execute_ablation_plan(self.registry,self.store,self.plan_id,definitions,2,.1,.25,"resume"); self.assertEqual(len(second),6); self.assertEqual(len(ablation_leaderboard(second)),2)
+        default=self.results[self.results.method=="refined contextual method"].sort_values("image_id"); full=first[first.method=="ABL-FULL"].sort_values("image_id"); self.assertEqual(default.final_proposals.tolist(),full.final_proposals.tolist()); self.assertEqual(default.first_true_anomaly_proposal_rank.fillna(-1).tolist(),full.first_true_anomaly_proposal_rank.fillna(-1).tolist())
 
     def test_loading_selected_images_and_exact_masks(self):
         plan=load_plan(self.registry,self.plan_id); images=selected_images(self.registry,plan); self.assertEqual(len(images),3)
