@@ -36,6 +36,7 @@ research_data/annotations/
 research_data/splits/
 research_data/reports/
 research_data/exports/
+research_data/.trash/
 research_data/registry/*.sqlite
 research_data/registry/*.sqlite-*
 research_data/registry/dataset_manifest.json

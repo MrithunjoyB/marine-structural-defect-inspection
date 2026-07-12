@@ -260,6 +260,12 @@ The default split is 70/15/15 with a deterministic seed. Available class labels 
 
 Research Evaluation can create an experiment from a registered dataset/version/split with subset size, reviewer, methods, status, parameters, and random seed. The saved JSON records the manifest hash, selected image IDs, preprocessing/proposal/weight/threshold settings, border margin, maximum regions, ablations, Git commit, Python and package versions, operating system, and creation time.
 
+Creating a plan freezes selection and configuration but does not analyze images. Use **Execute Registered Dataset Experiment** to batch-run the selected contour-only, fixed-threshold, multi-scale fused, and refined contextual methods without a sidebar upload. Execution calls the existing feature extraction and proposal pipeline directly, loads registered exact masks, and saves one automatic row for every image-method pair.
+
+Automatic matching accepts a proposal when it reaches the configured bounding-mask IoU or ground-truth overlap threshold. A centroid-inside-ground-truth fallback supports very thin anomalies. Top-K proposal recall counts a positive image as a hit when at least one of its first K ranked proposals matches a verified anomaly. Proposal precision is matched proposals divided by all proposals; proposal recall is matched ground-truth instances divided by all ground-truth instances; false proposals are unmatched final proposals. Clean images are excluded from positive Top-K denominators, and every proposal on a clean image is false.
+
+Automatic rows use `review_status = automatically_evaluated` and remain separate from human-review records. Executions move through planned, running, completed, partially completed, failed, or cancelled states. Resume skips completed image-method pairs, retry targets failed pairs, overwrite explicitly replaces completed pairs, and create-new-version preserves prior runs. Results, configuration, selected manifest, and method summaries are downloadable as CSV or JSON; **Open Selected Test Image** displays the original, exact mask, matched/unmatched proposals, ranks, and IoU values.
+
 Development/Test experiments may use local development images and unknown ground truth and remain excluded from final summaries by default. Final Research Evaluation requires a registered dataset, verified or reviewer-estimated ground truth, source/licence metadata, and a configuration snapshot; unknown provenance or licence is blocked unless explicitly overridden with a warning.
 
 ### Synthetic Intake

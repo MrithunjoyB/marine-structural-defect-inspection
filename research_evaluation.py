@@ -31,6 +31,7 @@ from experiment_tracking import (
     with_version,
 )
 from research_dataset import DatasetRegistry, FINAL_STATUS
+from registered_experiment import RegisteredExperimentStore, execute_plan, load_ground_truth, load_plan, method_summary, selected_images
 
 
 RECALL_CHART_COLUMNS = {
@@ -82,14 +83,15 @@ def render_research_evaluation(
         store, image_name, annotations, proposal_result, feature_maps,
         review_start_time, review_completion_time,
     )
-    _render_registered_dataset_experiment(output_dir.parent, preprocessing_settings or {})
+    automatic_store=RegisteredExperimentStore(output_dir / "registered_experiment_results.sqlite3")
+    _render_registered_dataset_experiment(output_dir.parent, preprocessing_settings or {},automatic_store)
     st.divider()
-    _render_dashboard_and_management(store)
+    _render_dashboard_and_management(store,automatic_store)
     st.divider()
     _render_legacy_migration(store, legacy_json_path)
 
 
-def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:dict)->None:
+def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:dict,automatic_store)->None:
     st.markdown("### Create Experiment from Registered Dataset")
     registry=DatasetRegistry(base_dir/"research_data"); datasets=registry.datasets()
     if datasets.empty:
@@ -111,6 +113,60 @@ def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:d
             st.success("Created reproducible registered-dataset experiment plan.")
             st.download_button("Download Experiment Configuration JSON",path.read_bytes(),path.name,"application/json")
         except (ValueError,json.JSONDecodeError) as error: st.error(str(error))
+    _render_registered_execution(registry,automatic_store)
+
+
+def _render_registered_execution(registry,store):
+    st.markdown("### Execute Registered Dataset Experiment")
+    with registry.connect() as con: plans=[dict(row) for row in con.execute("SELECT * FROM experiment_plans ORDER BY created_timestamp DESC").fetchall()]
+    if not plans: st.info("Create a registered-dataset experiment plan before execution."); return
+    labels={row["plan_id"]:f"{row['experiment_id']} | {row['dataset_id']} {row['dataset_version']} | {row['split']}" for row in plans}
+    plan_id=st.selectbox("Saved experiment plan",list(labels),format_func=labels.get,key="execution_plan")
+    plan=load_plan(registry,plan_id); version=int(st.number_input("Execution version",1,10000,1,key="registered_execution_version")); state=store.execution(plan_id,version)
+    st.json({"execution_status":state["status"],"selected_images":len(plan["selected_image_ids"]),"methods":plan["configuration"].get("proposal_methods",[]),"completed_pairs":state.get("completed_pairs",0),"total_pairs":state.get("total_pairs",0)})
+    criteria=st.columns(2); iou=float(criteria[0].slider("IoU threshold",0.,1.,.10,.01)); overlap=float(criteria[1].slider("Mask overlap threshold",0.,1.,.25,.01))
+    handling=st.radio("Completed-pair handling",["resume","overwrite","create new experiment version"],horizontal=True)
+    progress_bar=st.progress(0.); progress_text=st.empty()
+    def update(payload):
+        progress_bar.progress(min(payload["completed"]/max(payload["total"],1),1.)); progress_text.caption(f"Current image: {payload['current_image']} | Current method: {payload['current_method']} | {payload['completed']}/{payload['total']} runs | Elapsed: {payload['elapsed']:.1f}s | Estimated remaining: {payload['estimated_remaining']:.1f}s")
+    controls=st.columns(6)
+    execute=controls[0].button("Execute Registered Dataset Experiment",type="primary")
+    resume=controls[1].button("Resume Registered Dataset Experiment")
+    retry=controls[2].button("Re-run failed pairs")
+    if controls[3].button("Cancel execution"): st.session_state.registered_execution_cancel=True; st.warning("Cancellation requested; execution stops after the current pair.")
+    create_version=controls[4].button("Create new version")
+    delete_confirm=controls[5].checkbox("Confirm delete results")
+    if st.button("Delete results",disabled=not delete_confirm): st.success(f"Deleted {store.delete_results(plan_id,version)} automatic rows; the plan was preserved."); st.rerun()
+    if execute or resume or retry or create_version:
+        try:
+            run_version=store.next_version(plan_id) if handling=="create new experiment version" or create_version else version
+            mode="retry_failed" if retry else ("resume" if resume or handling=="resume" else "overwrite")
+            st.session_state.registered_execution_cancel=False
+            results=execute_plan(registry,store,plan_id,run_version,iou,overlap,mode,update,lambda:st.session_state.get("registered_execution_cancel",False))
+            st.success(f"Execution finished with {len(results)} persistent image-method result rows."); st.rerun()
+        except (ValueError,KeyError) as error: st.error(str(error))
+    _render_automatic_results(registry,store,plan_id,version)
+
+
+def _render_automatic_results(registry,store,plan_id,version):
+    results=store.dataframe(plan_id,version)
+    if results.empty:return
+    st.markdown("#### Registered Dataset Results")
+    st.dataframe(results,width="stretch",hide_index=True); summary=method_summary(results); st.markdown("##### Method-level Summary"); st.dataframe(summary,width="stretch",hide_index=True)
+    downloads=st.columns(5); downloads[0].download_button("Download result CSV",results.to_csv(index=False).encode(),"registered_results.csv","text/csv"); downloads[1].download_button("Download result JSON",results.to_json(orient="records",indent=2).encode(),"registered_results.json","application/json")
+    plan=load_plan(registry,plan_id); selected=selected_images(registry,plan); config=json.dumps(plan,indent=2,default=str).encode(); manifest=selected.to_json(orient="records",indent=2).encode(); report=json.dumps({"execution":store.execution(plan_id,version),"summary":summary.to_dict("records")},indent=2,default=str).encode()
+    downloads[2].download_button("Experiment configuration JSON",config,"experiment_configuration.json","application/json"); downloads[3].download_button("Selected image manifest",manifest,"selected_image_manifest.json","application/json"); downloads[4].download_button("Summary report",report,"summary_report.json","application/json")
+    if not summary.empty:
+        _grouped_chart(summary,{"Top-1":"top_1_proposal_recall","Top-3":"top_3_proposal_recall","Top-5":"top_5_proposal_recall","Top-8":"top_8_proposal_recall"},"Automatic Top-K Recall","Recall",True)
+        _grouped_chart(summary,{"Precision":"proposal_precision","Recall":"proposal_recall"},"Automatic Precision / Recall","Score",True)
+        _single_chart(summary,"false_proposals_per_image","Automatic False Proposals per Image","False proposals")
+        _single_chart(summary,"processing_time_seconds","Automatic Processing Time","Seconds")
+    selected_id=st.selectbox("Selected test image",results.image_id.unique(),format_func=lambda value:results.loc[results.image_id==value,"image_filename"].iloc[0])
+    if st.button("Open Selected Test Image"):
+        row=selected[selected.image_id==selected_id].iloc[0]; image_path=registry.root/"raw"/row.dataset_id/row.stored_filename; truth=load_ground_truth(row); columns=st.columns(2); columns[0].image(str(image_path),caption="Original image",width="stretch"); columns[1].image(truth,caption="Exact ground-truth mask",width="stretch")
+        image_results=results[(results.image_id==selected_id)&(results.run_status=="completed")]
+        for _,item in image_results.iterrows(): st.image(item.visualization_path,caption=f"{item.method}: green matched, red unmatched; ranks and IoU shown",width="stretch")
+        st.dataframe(image_results[["method","first_true_anomaly_proposal_rank","proposal_details_json"]],width="stretch",hide_index=True)
 
 
 def _render_recording(store, image_name, annotations, proposal_result, feature_maps, review_start, review_completion):
@@ -199,11 +255,16 @@ def _render_recording(store, image_name, annotations, proposal_result, feature_m
                 st.error(f"Save cancelled: {error}")
 
 
-def _render_dashboard_and_management(store: ExperimentStore) -> None:
+def _render_dashboard_and_management(store: ExperimentStore,automatic_store=None) -> None:
     st.markdown("### Manage Experiments")
     all_records = store.dataframe()
+    automatic=automatic_store.dataframe() if automatic_store else pd.DataFrame()
+    if not automatic.empty:
+        st.caption("Automatically evaluated registered-dataset records")
+        st.dataframe(automatic,width="stretch",hide_index=True)
     if all_records.empty:
-        st.info("No SQLite experiment records are stored yet.")
+        if automatic.empty: st.info("No SQLite experiment records are stored yet.")
+        else: st.info("Automatic results are shown above; no separate human-review records are stored.")
         return
 
     include_development = st.checkbox("Include development records", value=False)
