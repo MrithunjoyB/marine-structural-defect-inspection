@@ -22,6 +22,13 @@ The optional learned path adds isolated modules without changing that classical 
 src/structvision/
 ├── development_protocol.py       read-only protected-cohort selection
 ├── learned_executor.py           two-method v2 matrix adaptation
+├── hybrid/
+│   ├── protocol.py               three-role group-aware protected manifest
+│   ├── features.py               aligned candidate-level evidence
+│   ├── selection.py              fusion-fit-only constrained enumeration
+│   ├── artifact.py               immutable fusion identity and replay
+│   ├── detector.py               separate public hybrid detector
+│   └── experiment.py             one-shot three-method v2 holdout
 └── normal_feature/
     ├── configuration.py          one fixed development configuration
     ├── preprocessing.py          aspect-preserving letterbox/inverse projection
@@ -57,5 +64,9 @@ The existing Streamlit UI remains operational and unchanged. It continues to own
 Importing `structvision` or `structvision.normal_feature` does not import Torch, Anomalib, timm, Streamlit, or a database driver. Heavy learned dependencies are resolved lazily only when fitting or scoring is requested. The lightweight classical install is therefore unchanged. `NormalFeatureAnomalyDetector` verifies exact dependency versions, the pinned pretrained-weight hash, CPU reference policy, environment-lock hash, manifest identity, and artifact identity before calling the official Anomalib `PatchcoreModel` and `KCenterGreedy` components.
 
 Upstream owns embedding, coreset selection, nearest-neighbour distances, image scoring, and anomaly maps. StructVision owns protected cohort construction, letterboxing, provenance, immutable persistence, inverse projection, calibration, component extraction, and v2 row adaptation. Scores and proposal types never cross the frozen classical implementation boundary. See [Normal-Feature Baseline](normal-feature-baseline.md).
+
+## Hybrid Isolation Boundary
+
+The hybrid package depends on the two public detector paths but neither baseline depends on it. It consumes complete immutable classical proposals and a full-resolution PatchCore map, verifies coordinate and input-hash equality, extracts features without truth/category/filename inputs, and emits new typed records under `structvision-proposal-guided-hybrid-v1-dev`. Classical masks remain byte-identical. Fusion fitting receives a capability object exposing fusion-fit identities only; holdout identities are loaded later by a one-shot executor. Runtime persistence remains sink-controlled and uses a new v2 store. See [Proposal-Guided Hybrid](proposal-guided-hybrid.md).
 
 See [Reusable API](reusable-api.md), [Methodology](methodology.md), and [Scientific Contract V2](scientific-contract-v2.md).

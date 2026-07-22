@@ -36,6 +36,6 @@ normal-feature = [
 ]
 
 [tool.setuptools]
-packages = ["structvision", "structvision.normal_feature", "scientific_contract"]
+packages = ["structvision", "structvision.normal_feature", "structvision.hybrid", "scientific_contract"]
 package-dir = {structvision = "src/structvision", scientific_contract = "scientific_contract"}
 py-modules = ["preprocess", "feature_extraction", "region_proposal", "scoring"]

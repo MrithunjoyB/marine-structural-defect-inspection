@@ -77,3 +77,9 @@ The run sequence is fixed:
 6. audit row pairing, counters, artifact replay, historical-store immutability, and protected-file hashes.
 
 Runtime artifacts are ignored. The committed manifest, lock, protocol, model/data cards, and descriptive results contain sufficient identities to reconstruct the run after separately acquiring the verified official weight. Commands and limitations are in [Normal-Feature Baseline](normal-feature-baseline.md); quantitative development diagnostics are in [Normal-Feature Development Results](results/normal-feature-development.md).
+
+## Proposal-Guided Hybrid Development Experiment
+
+`SYN-PROPOSAL-HYBRID-DEV-001` version 1 uses protocol `structvision-hybrid-development-v1` and classification **development holdout — non-confirmatory**. Fusion was fitted and selected only from protected train roles. After artifact `a21b5880…d8d1` was frozen, a one-shot ledger admitted exactly one 72-image holdout attempt for the frozen classical, protected PatchCore, and new hybrid identities. The new append-only store contains 216/216 paired v2 rows.
+
+The primary hybrid reduced clean FP/image from 4.4118 to 0.3235, but its 0.020833 micro-sensitivity decrease exceeded the 0.02 margin and image-level sensitivity decreased. The candidate is therefore rejected. No repeat holdout execution, post-hoc threshold change, or method modification was performed. Full identities, all 15 fusion candidates, budgets, categories, localisation, paired effects, timing, and integrity checks are in [Proposal-Guided Hybrid Development Results](results/proposal-guided-hybrid-development.md).

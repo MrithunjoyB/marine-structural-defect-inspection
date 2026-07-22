@@ -56,3 +56,9 @@ All ten expected validation categories remain. Template and source groups are di
 Only `normal_fit` constructs the feature memory and coreset; no anomaly mask or validation score enters fitting. `calibration_validation` supplies clean false-proposal budgets and development diagnostics. Threshold selection follows a fixed descending-threshold path and uses only clean false-proposal burden, not anomaly-label optimization. All candidate points and poor operating points remain in the calibration artifact.
 
 No image in this protocol is described as independent, confirmatory, real-world, or professor-provided.
+
+## Proposal-guided hybrid protocol
+
+The newer `structvision-hybrid-development-v1` protocol is separate from the normal-feature baseline protocol above. Its committed [manifest](../development_data/hybrid-development-manifest-v1.json) has logical SHA-256 `a1e6f9a83e5e8d73275236e6dc4fafd985e6e1ef2c4aef21fd4156dc821829a4`. It retains eligible train anomalies for fusion fitting and deterministically divides clean train identity groups between 70-image `hybrid_normal_fit` and the clean portion of 126-image `hybrid_fusion_fit`; the 72 eligible validation images form `hybrid_development_holdout`.
+
+Exact, perceptual-candidate, source, template, and acquisition components cannot cross the three roles. Fusion fit contains 19 clean and 107 positive images; holdout contains 34 clean and 38 positive images. Both contain every positive category and all priority categories. The capability-limited fusion-fit loader cannot return holdout paths. The holdout was loaded once only after fusion freezing, remains non-confirmatory because of prior validation exposure, and cannot be used to revise the rejected candidate. Composition and limitations are in the [Hybrid Data Card](data-card-hybrid-development.md).

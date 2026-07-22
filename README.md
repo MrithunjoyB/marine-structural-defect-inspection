@@ -203,6 +203,8 @@ The current controlled protocol uses `synthetic-controlled` v1.0, balanced split
 
 The normal-feature reference run is distinct and uses only the committed protected manifest. Run `normal_feature_development.py` inside the locked learned environment after explicitly caching and verifying the official weight. The script fits only `normal_fit`, calibrates only on `calibration_validation`, writes only to an explicit ignored output directory, and fails closed on identity drift.
 
+The separate proposal-guided hybrid work package is complete. It uses [protocol `structvision-hybrid-development-v1`](docs/development-data-protocol.md), a new implementation identity, a hybrid-specific normal memory, fusion-fit-only selection, and exactly one non-confirmatory development holdout attempt. The candidate substantially reduced clean proposal burden but failed the fixed overall and image-level sensitivity preservation criteria, so it is retained as a **rejected development candidate** and was not retuned. See [Hybrid Method](docs/proposal-guided-hybrid.md), [Development Results](docs/results/proposal-guided-hybrid-development.md), [Model Card](docs/model-card-proposal-guided-hybrid.md), and [Data Card](docs/data-card-hybrid-development.md).
+
 ## Using External or Professor-Provided Data
 
 **Do not commit professor-provided, private, restricted, or unlicensed images to the public repository.**
@@ -244,7 +246,7 @@ Register such data through Research Dataset Intake, preserve source and licence 
 ### Learning-Based Extension
 
 - treat the protected PatchCore implementation only as a baseline and preserve its failure cases;
-- design any classical/normal-feature hybrid as a new, separately versioned future algorithm;
+- retain the rejected proposal-guided hybrid result without post-holdout retuning and use a new protocol/identity for any future design;
 - evaluate SAM/SAM2-assisted mask refinement;
 - train YOLO detection or segmentation models after sufficient review; and
 - compare proposal-assisted annotation with conventional annotation effort.
