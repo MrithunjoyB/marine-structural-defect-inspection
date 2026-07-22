@@ -1,98 +1,54 @@
 # Experiments
 
-StructVision-AI separates experiment planning, execution, persistent results, and analysis.
+StructVision-AI now separates the historical experiment mechanism from the prospective immutable scientific contract.
 
-## Experiment Identity
+## Historical V1 Plans And Rows
 
-A registered experiment plan contains:
+The existing registry plans and the 888 automatic rows are preserved under `structvision-eval-v1-historical`. Historical plans recorded useful identity fields, but some contain empty placeholder configuration dictionaries, do not hash image and ground-truth content into every result, and are not immutably tied to the actual executed method matrix. Resume, overwrite, result deletion, and post-hoc experiment reassignment are available in those engineering paths.
 
-- experiment and plan IDs;
-- experiment version and status;
-- dataset ID, version, and split;
-- selected image IDs;
-- manifest hash;
-- proposal methods;
-- preprocessing and proposal parameters;
-- matching thresholds;
-- subset filters;
-- random seed;
-- code commit hash;
-- Python, package, and operating-system metadata; and
-- reviewer identity.
+Historical matching is permissive and non-one-to-one. Historical baseline Top-K may use unordered component output. These records remain inspectable engineering evidence; they are not upgraded, migrated, or made publication-valid by the v2 implementation.
 
-An experiment plan freezes intent and selection but performs no image analysis. Execution loads the selected registered images and runs each configured image-method pair. One automatic result row is stored per experiment/version/image/method.
+## Immutable V2 Specification
 
-## Registered Batch Execution
+Every future scientific run begins with a frozen `ExperimentSpecificationV2`. It contains or hashes:
 
-The batch engine calls the existing feature extraction and proposal pipeline. Synthetic registered images load exact masks from their annotation paths. Baselines and refined proposals are evaluated through a common matching function.
+- experiment, dataset, split-manifest, and split-lock identity;
+- ordered selected image IDs, image hashes, and ground-truth hashes;
+- selected method IDs, implementation versions, full method settings, and ranking definitions;
+- complete preprocessing, proposal, feature, scoring, threshold, maximum-proposal, and seed settings;
+- deterministic-mode state and the complete evaluation-policy hash;
+- allowed fitting/calibration splits and an explicit test-access prohibition;
+- Git commit, clean/dirty state, and a diff-content hash when dirty;
+- Python, dependency, operating-system, hardware, OpenCV, and backend metadata; and
+- a deterministic content-addressed specification hash.
 
-Execution states are `planned`, `running`, `completed`, `partially_completed`, `failed`, and `cancelled`. Progress reports the current image and method, completed and total pairs, elapsed time, and estimated remaining time.
+Empty configuration dictionaries are invalid. Expected execution pairs always equal selected images multiplied by selected methods.
 
-## Resume And Duplicate Protection
+## Fail-Closed Execution Boundary
 
-Completed image-method pairs are identified by stable keys and skipped during resume. Failed pairs can be retried separately. Existing pairs are not silently recomputed; reviewers choose resume, overwrite, or a new execution version. Cancellation takes effect at a pair boundary.
+Future execution must load the immutable specification and construct the executable configuration only from it. The executable configuration hash is compared with the method-specific expected hash before any result is accepted. A changed preprocessing option, proposal limit, method parameter, scoring value, seed, deterministic flag, or evaluation setting fails closed.
 
-Deleting automatic results removes the selected execution rows but preserves the registered plan. Manual human-review records remain in a separate store and use different review-status semantics.
+Attempt counters record expected, attempted, completed, failed, skipped, and unique stored pairs. Each result persists the specification hash, executed-configuration hash, method implementation identity, evaluation-policy identity and hash, image and truth hashes, proposal artifact hash or complete proposal details, matching-policy hash, attempt ID, deterministic state, timestamp, and completion status.
 
-## Subset Selection
+## Append-Only V2 Storage
 
-Plans may select:
+`scientific_contract.result_store.V2ResultStore` creates a caller-selected side-by-side database. It uses transactions, foreign keys, uniqueness constraints, schema-version records, migration history, and plain append-only inserts. It has no overwrite, delete, result-reassignment, or in-place historical migration operation. Corrections are new rows linked by explicit supersession records.
 
-- all images in a registered split;
-- anomaly-present images only;
-- clean/no-anomaly images only;
-- selected anomaly categories;
-- selected clean artefact types; or
-- a balanced positive/negative subset.
+The v2 store is not wired to the historical Streamlit executor in this work package because no new benchmark execution is authorised. Tests exercise the complete specification, validation, and storage boundary only in temporary directories.
 
-Subset selection and random sampling are recorded in the plan. Scientific comparison should use identical selected image IDs, dataset version, split, thresholds, and seed.
+## Historical Protocols
 
-## Automatic Ground-Truth Evaluation
+The existing controlled studies remain available exactly as recorded:
 
-Proposal masks are matched to connected ground-truth instances using configurable mask IoU and ground-truth overlap thresholds. A centroid-inside fallback supports thin anomalies where small geometric differences can produce low IoU. Matching details retain rank, matched status, and IoU for visual inspection.
+- `SYN-BALANCED-001` used 12 `synthetic-controlled` test images and four historical methods.
+- `ABL-SYN-BALANCED-001` stored the historical ablation rows.
+- `SYN-SPECULAR-SUPPRESS-001` retained both a negative first version and a second exploratory version.
+- `SYN-EXPANDED-VALIDATION-001` stored 600 rows across six methods on 100 expanded test images, although its registry plan listed four base methods.
 
-Automatic rows use `review_status = automatically_evaluated`; they are never presented as manually reviewed annotations.
+`ABL-RERANK-ONLY` remains the stored method ID. Its descriptive display label is **single-scale contextual classical baseline**. The v1 balanced score and metric differences do not prove the causal value of reranking or justify choosing this method under v2.
 
-## Research Analysis Scope
+The expanded comparison is classified as **historical engineering comparison — not confirmatory** because the 80-image pilot is contained byte-for-byte in the 500-image dataset and includes 13 final-test images. See [Historical Dataset Overlap Audit](audits/historical-dataset-overlap.md).
 
-The analysis browser and scientific analysis are deliberately separate. Browser search and filters do not change scientific scope unless **Analyse currently filtered result rows** is explicitly selected. The default mode selects one experiment ID/version and validates dataset identity.
+## Future Execution Requirements
 
-Advanced-method pairing requires unique rows for experiment ID, experiment version, image ID, and method. Duplicate or unmatched fused/contextual rows block paired analysis. The audit panel reports source rows, unique images, methods, category counts, duplicates, and unmatched images.
-
-## Exports
-
-Available outputs include filtered CSV/JSON, experiment configuration JSON, selected-image manifest, summary report, proposal visualisations, category summaries, paired comparisons, and ablation reproducibility files. Exports are derived copies; the SQLite row remains the persistent record.
-
-## Controlled Benchmark Reproduction
-
-The currently documented benchmark uses:
-
-```text
-dataset: synthetic-controlled
-dataset version: 1.0
-split mode: Balanced Synthetic Benchmark
-split seed: 42
-experiment: SYN-BALANCED-001
-experiment version: 1
-methods: contour-only, fixed-threshold, multi-scale fused, refined contextual
-```
-
-The generated dataset and SQLite stores are runtime artefacts and are not committed. Reproduction therefore requires generating/registering the controlled dataset, finalising the seed-42 split, creating the plan, executing all pairs, and exporting the resulting configuration and manifest hashes.
-
-## Ablation Experiments
-
-Ablation plans derive from a validated source experiment. Execution is blocked when source rows contain duplicates, mixed versions, dataset/split mismatch, or a selected-image set that cannot be reproduced. Each configuration stores enabled components, thresholds and weights, seed, code commit, manifest hash, and matching thresholds.
-
-The full configuration equals the default refined contextual method. Leaderboard differences are empirical benchmark observations, not causal proof of component value.
-
-## Specular-Suppression Protocol
-
-The controlled comparison uses `SYN-SPECULAR-SUPPRESS-001`, the same 12-image manifest as `SYN-BALANCED-001`, seed 42, IoU threshold 0.10, and mask-overlap threshold 0.25. Compared methods are multi-scale fused, `ABL-FULL`, `ABL-RERANK-ONLY`, and `ABL-RERANK-SPECULAR-SUPPRESS`.
-
-Version 1 is retained as a negative pilot: boundary-contaminated core evidence and a conservative rejection threshold reduced scores but not proposal counts. The corrected distance-transform core measurement is evaluated in version 2 rather than overwriting version 1. Mandatory tolerances are no decrease in crack or pitting recall and no greater than 0.01 absolute decrease in thin-crack mean IoU.
-
-## Expanded Synthetic Validation
-
-`SYN-EXPANDED-VALIDATION-001` v1 freezes commit `71964778475d551444d356bdaa126f06c86bb0ef`, seed 42, IoU 0.10, overlap 0.25, maximum regions 8, and the 100-image `synthetic-expanded` v1.0 test manifest. It compares contour-only, fixed-threshold, multi-scale fused, refined contextual, `ABL-RERANK-ONLY`, and `ABL-RERANK-SPECULAR-SUPPRESS`, yielding exactly 600 unique completed pairs.
-
-The 80-image pilot passed before final generation and remains registered separately. No algorithm setting was changed after test execution. The expanded result is retained as a negative validation because aggregate recall decreased, despite improved specular false-positive behaviour. Full results are in [Expanded Synthetic Benchmark](results/expanded-synthetic-benchmark.md).
+A future rerun must create a new v2 specification and new v2 result database, use one-to-one matching, mark unordered methods Top-K-ineligible, validate canonical clean-image annotations, lock non-overlapping development and confirmatory data, and predeclare the false-proposal budget and category preservation margins. Historical rows must not be copied into the v2 schema as if they had been generated under v2 semantics.

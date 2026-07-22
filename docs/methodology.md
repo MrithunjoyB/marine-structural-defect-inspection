@@ -1,6 +1,6 @@
 # Methodology
 
-This document describes the implemented visual anomaly-proposal pipeline. It does not define a certified defect-detection or engineering-diagnosis method.
+This document describes the implemented visual anomaly-proposal pipeline. The central current algorithm is a classical and contextual image-analysis pipeline, not a foundation-model-assisted detector. Optional downstream learned integrations are separate future capabilities. The method is not a certified defect detector or engineering-diagnosis system.
 
 ## Input And Preprocessing
 
@@ -91,9 +91,9 @@ The baseline definitions are executed on identical registered images for paired 
 
 ### Experimental Specular Suppression
 
-`ABL-RERANK-SPECULAR-SUPPRESS` inherits `ABL-RERANK-ONLY` and enables a continuous candidate-level specular likelihood. The score combines high-value/low-saturation occupancy, Lab chroma, RGB channel agreement, intensity smoothness, entropy, candidate-to-context brightness, compactness, and eroded-core texture/gradient evidence. It does not use category labels, filenames, or ground truth.
+`ABL-RERANK-SPECULAR-SUPPRESS` inherits the stored historical configuration ID `ABL-RERANK-ONLY`, displayed descriptively as the **single-scale contextual classical baseline**, and enables a continuous candidate-level specular likelihood. The score combines high-value/low-saturation occupancy, Lab chroma, RGB channel agreement, intensity smoothness, entropy, candidate-to-context brightness, compactness, and eroded-core texture/gradient evidence. It does not use category labels, filenames, or ground truth.
 
-The effective likelihood is reduced by two structural safeguards. The crack safeguard uses rotated elongation, thin mask occupancy, and scale agreement. The pitting safeguard uses multiple connected components and irregular, textured core evidence. The policy first applies a reproducible ranking penalty and rejects only candidates above the configured effective-likelihood threshold with weak structural evidence. Diagnostics retain component values, safeguards, before/after scores, decision, and rejection reason. Suppression is disabled by default and does not alter existing methods.
+The effective likelihood is reduced by two structural safeguards. The crack safeguard uses rotated elongation, thin mask occupancy, and scale agreement. The pitting safeguard uses multiple connected components and irregular, textured core evidence. The historical policy applies a ranking penalty and may reject candidates above its configured effective-likelihood threshold with weak structural evidence. Diagnostics retain component values, safeguards, before/after scores, decision, and rejection reason. Suppression is experimental, disabled by default, and not validated by the current historical evidence.
 
 ## Implementation Boundaries
 

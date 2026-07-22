@@ -2,7 +2,7 @@
 
 ## Scope
 
-These results are preliminary and based on a small synthetic dataset. They do not establish real-world marine or structural inspection performance.
+These are preserved historical v1 engineering results from a small synthetic dataset. They do not establish real-world marine or structural inspection performance and are not recalculated under v2.
 
 | Item | Value |
 |---|---:|
@@ -25,7 +25,7 @@ These results are preliminary and based on a small synthetic dataset. They do no
 | Multi-scale fused | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.5000 | 0.7944 | 0.75 | 0.0078 |
 | Refined contextual | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.5000 | 0.7944 | 0.75 | 0.0081 |
 
-Top-\(K\) recall uses six positive test images. Processing time is an approximate recorded mean and should not be generalised across hardware.
+Top-\(K\) recall uses six positive test images under historical semantics. Contour and fixed-threshold baselines were not validly ranked under v2, so their displayed Top-K values are not eligible for future comparative claims. Processing time is an approximate recorded mean and should not be generalised across hardware.
 
 ## Paired Advanced-Method Analysis
 
@@ -39,4 +39,4 @@ Normal-texture images produce zero false proposals under the recorded advanced m
 
 An opt-in follow-up, `ABL-RERANK-SPECULAR-SUPPRESS`, reduced the recorded specular-highlight burden from 3.0 to 2.0 proposals per image in `SYN-SPECULAR-SUPPRESS-001` version 2 while preserving the recorded crack, pitting, and normal-texture criteria. The complete protocol, negative pilot, and limitations are documented in [Specular Suppression](specular-suppression.md).
 
-The subsequent 100-image frozen test did not validate the method because one weld-disturbance detection was lost and aggregate recall decreased. See [Expanded Synthetic Benchmark](expanded-synthetic-benchmark.md). This later negative result supersedes any interpretation of the 12-image result as sufficient validation.
+The subsequent 100-image historical comparison did not validate the method because one weld-disturbance detection was lost and macro per-positive-image component recall decreased. It also overlaps the pilot and is not confirmatory. See [Expanded Synthetic Benchmark](expanded-synthetic-benchmark.md). This evidence precludes interpreting the 12-image result as sufficient validation.

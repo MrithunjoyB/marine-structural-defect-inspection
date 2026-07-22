@@ -2,14 +2,14 @@
 
 ## Research Question
 
-Can an optical/structural candidate score reduce false proposals on smooth achromatic highlights while preserving the controlled gains of contextual reranking? This experiment concerns the 12-image synthetic test only and does not establish real-world reflection suppression.
+This historical exploratory experiment asked whether an optical/structural candidate score could reduce false proposals on smooth achromatic highlights. It concerns a 12-image synthetic test under v1 semantics and does not establish real-world reflection suppression or validate the mechanism.
 
 ## Configuration
 
 | Item | Value |
 |---|---|
 | Configuration | `ABL-RERANK-SPECULAR-SUPPRESS` |
-| Display name | Reranking with specular suppression |
+| Display name | Historical single-scale contextual baseline with experimental specular suppression |
 | Experiment | `SYN-SPECULAR-SUPPRESS-001` |
 | Final evaluated version | 2 |
 | Dataset | `synthetic-controlled` v1.0, test split |
@@ -49,4 +49,4 @@ The predeclared material-IoU tolerance was an absolute decrease no greater than 
 
 ## Interpretation
 
-All mandatory controlled criteria were met in version 2. The result is promising within this benchmark because false proposals decreased without a measured crack, pitting, or normal-texture loss. It is not evidence of general marine-inspection improvement. Only three synthetic specular images are present, and a one-proposal-per-image reduction may reflect the generator's limited highlight geometry. The mechanism did not eliminate all highlights, which is consistent with the conservative policy, but broader bright-crack, reflective-pitting, mixed-texture, exposure, and real-camera tests are required.
+The historical version-2 rows met the study's own small controlled tolerances, but this is not v2 validation or a method-selection result. Only three synthetic specular images are present, the baseline label does not isolate a causal reranking effect, and a one-proposal-per-image reduction may reflect the generator's limited highlight geometry. Suppression remains experimental and disabled by default. Broader development evidence and an independent, predeclared v2 evaluation would be required before any validation claim.

@@ -1,0 +1,40 @@
+# Scientific Evaluation And Provenance Contract V2
+
+The prospective contract is implemented in the Streamlit-independent `scientific_contract/` package. It changes no proposal generation, preprocessing, scoring, thresholds, mask refinement, or specular-suppression behaviour.
+
+## Evidence Status
+
+| Item | Policy / status | Permitted interpretation | Required action |
+|---|---|---|---|
+| Historical automatic rows | `structvision-eval-v1-historical` | Engineering evidence under original permissive matching and ordering semantics | Preserve unchanged; do not recalculate claims |
+| Future evaluation | `structvision-eval-v2` | Scientifically defined metrics after a valid immutable specification and execution | Use strict one-to-one assignment and append-only v2 storage |
+| Current expanded comparison | Historical engineering comparison — not confirmatory | Negative/exploratory generator evidence only | Rebuild a non-overlapping development/confirmatory protocol before rerun |
+| Confirmatory evidence | None currently | No confirmatory performance claim is supported | Acquire and lock independent data, then run a predeclared v2 experiment |
+| Zero near-duplicate leakage | Unsupported for the expanded study | The legacy 64-bit hash screen cannot prove absence | Use exact, perceptual-candidate, source, template, and acquisition-group audit evidence |
+| Historical balanced score | Exploratory v1 field | Describes one arbitrary weighting only | Do not use as the v2 primary method selector |
+
+## Module Boundaries
+
+- `evaluation_policy.py` defines policy identity, denominators, thresholds, endpoints, and hashes.
+- `matching.py` stores lossless masks, validates ranking and annotation semantics, and performs deterministic one-to-one matching.
+- `metrics.py` separates micro, macro, image-level, clean, localisation, ranked, category, nuisance, acquisition-group, and efficiency quantities.
+- `provenance.py` captures Git and runtime state without writing files.
+- `specification.py` freezes the complete selected data, methods, configuration, evaluation identity, code state, and environment.
+- `result_store.py` supplies the explicit append-only v2 SQLite sink.
+- `dataset_audit.py` performs read-only exact, perceptual-candidate, and declared-group comparison.
+
+Imports have no filesystem side effects. Analysis functions accept explicit inputs and return typed records. Only construction of an explicit `V2ResultStore` writes to its caller-selected path.
+
+## Matching And Reconstruction
+
+The matcher records the complete similarity matrix and lossless proposal/truth mask encodings. Valid edges require the named mask-IoU threshold. Deterministic assignment maximises valid match count and then total IoU. Every proposal decision includes an assigned truth ID or unmatched reason, IoU, Dice, truth overlap, proposal overlap, threshold, metric, score/rank, and a centroid diagnostic that cannot grant a match. The stored evidence can reconstruct evaluation without running inference.
+
+## Result Identity And Counters
+
+The specification hash is deterministic over every scientific field, including ordered image/method identity and expected executed-configuration hashes. Results that disagree with the specification's image hash, truth hash, method version, configuration hash, evaluation policy, or deterministic state are rejected. One transaction appends an immutable attempt and its unique image-method rows. Expected pairs equal selected images multiplied by selected methods; counters must reconcile exactly.
+
+Schema-version and migration-history rows document the v2 database layout. Foreign keys bind results to registered specifications and attempts. Explicit supersession links preserve both prior and successor rows.
+
+## Scope Limit
+
+This contract makes future evaluation defensible and future evidence reproducible. It does not repair historical metrics, establish publication readiness, validate any algorithm, or authorise a new experiment.

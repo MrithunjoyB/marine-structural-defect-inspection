@@ -39,7 +39,9 @@ Split allocation operates on indivisible connected groups. Exact duplicates rema
 
 The **Balanced Synthetic Benchmark** mode uses constrained allocation when ordinary target percentages cannot preserve useful coverage. For the 33-image controlled dataset with seed 42, the resulting counts are 15 train, 6 validation, and 12 test. The test size is deliberately larger than 15% so four template groups remain represented without leakage.
 
-The **Expanded Synthetic Benchmark** mode allocates deterministic five-image template/source groups independently within each category. For `synthetic-expanded` v1.0 and seed 42, each 50-image category contributes exactly 30 train, 10 validation, and 10 test images, producing a 300/100/100 split. The separately registered `synthetic-expanded-pilot` contains the retained 80-image generation gate. Clean images have an explicit `no_anomaly` outcome and no annotation path; anomaly images have non-empty exact binary masks.
+The historical **Expanded Synthetic Benchmark** mode allocated deterministic groups within the 500-image registration, producing a 300/100/100 split. A later cross-dataset audit found that `synthetic-expanded-pilot` is not independent: all 80 pilot files recur in the 500-image dataset and 13 occur in its test split. The expanded test is therefore not confirmatory. See the [overlap audit](audits/historical-dataset-overlap.md).
+
+For future v2 registration, clean images use explicit `ground_truth_status = no_anomaly`, zero truth instances, and no required empty mask. Anomaly-present images require immutable truth IDs and valid non-empty annotation objects. Legacy empty clean masks may be read only with an explicit warning; inconsistent status/annotation combinations are rejected.
 
 Before finalisation, the preview reports image and group counts, positive/clean counts, category distributions, missing categories, and leakage checks. Finalisation is blocked when the test split lacks positive images, clean images, category diversity, or required benchmark categories. An override requires an explicit warning acknowledgement.
 

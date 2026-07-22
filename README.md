@@ -6,7 +6,7 @@ StructVision-AI is a research-oriented computer-vision framework for generating,
 
 ## Abstract
 
-Visual inspection research frequently begins before representative labelled data, reliable class definitions, or trained domain models are available. StructVision-AI investigates proposal generation in this setting: candidate regions are extracted from classical image evidence, evaluated across spatial scales, compared with their local context, refined into binary masks, and ranked for review. The framework separates anomaly evidence from mask reliability, supports manual annotation and automatic matching against registered ground truth, and records dataset provenance, split assignments, code state, configurations, and evaluation outputs. Current evidence is derived from a controlled 33-image synthetic benchmark containing anomaly-present and clean artefact conditions. Experiments compare contour, fixed-threshold, multi-scale fused, and refined contextual methods, with category-wise, paired, bootstrap, and ablation analyses. These experiments establish reproducible behaviour on the controlled benchmark only. Validation on licensed, expert-reviewed structural and marine imagery remains future work.
+Visual inspection research frequently begins before representative labelled data, reliable class definitions, or trained domain models are available. StructVision-AI investigates proposal generation in this setting: candidate regions are extracted from classical image evidence, evaluated across spatial scales, compared with their local context, refined into binary masks, and ranked for review. The framework separates anomaly evidence from mask reliability and supports manual annotation and automatic matching against registered ground truth. Historical synthetic experiments recorded useful engineering evidence, but their plans, matcher, ordering, and result rows do not meet the prospective v2 scientific contract. No historical result is publication-valid or confirmatory. Validation on licensed, expert-reviewed structural and marine imagery remains future work.
 
 ## Research Motivation
 
@@ -64,8 +64,9 @@ The framework provides:
 - contextual and multi-scale candidate ranking with segmentation-ready masks;
 - human review, candidate labelling, mask correction, and annotation export;
 - registered dataset intake with provenance, licensing, hashing, duplicate checks, and leakage-safe group allocation;
-- reproducible experiment plans containing manifest hashes, selected images, code commits, package versions, configurations, and seeds;
-- automatic ground-truth matching with Top-\(K\), precision, recall, localisation, false-proposal, and timing metrics;
+- preserved historical experiment plans and rows with their original limitations;
+- a prospective immutable experiment specification tying image/truth hashes, complete configuration, evaluation policy, code state, and runtime metadata together;
+- deterministic one-to-one ground-truth matching with explicit denominators, null handling, ranking eligibility, localisation, nuisance, and timing semantics;
 - category-wise analysis of anomaly categories and clean artefact robustness;
 - strict paired method comparison with deterministic bootstrap intervals; and
 - a configurable ablation framework that preserves the default proposal method.
@@ -74,21 +75,21 @@ These are engineering and research capabilities of the repository, not claims of
 
 ## Experimental Protocol
 
-Dataset versions are registered before final evaluation. Exact image duplicates are excluded, while near-duplicate, source, and template groups remain within one split. The controlled benchmark uses deterministic group-aware allocation with seed 42. An experiment plan freezes the dataset version, split, selected image IDs, proposal methods, matching thresholds, seed, and configuration snapshot. Execution then produces one persistent automatic row per image-method pair.
+Historical v1 plans and automatic rows remain under `structvision-eval-v1-historical`. Their matcher combines mask IoU, truth overlap, and a centroid fallback without one-to-one assignment, and historical baselines were not all validly ranked. Those rows retain their original meaning only.
 
-Automatic ground-truth matching uses mask IoU, ground-truth overlap, and a centroid fallback for thin anomalies. Positive-image Top-\(K\) recall is defined when at least one of the first \(K\) ranked proposals matches verified ground truth. Clean images do not enter recall denominators; their proposals are evaluated as false positives. Scientific analyses require one explicit experiment ID and version, strict image-ID pairing, and consistent dataset scope.
+Future scientific experiments must use `structvision-eval-v2`: an immutable `ExperimentSpecificationV2`, strict one-to-one mask-IoU assignment, Top-K only for explicitly scored and deterministically ranked methods, canonical clean-image semantics, fail-closed executed-configuration verification, and a separate append-only result store. No future benchmark is run by this repair.
 
 See [Experiments](docs/experiments.md) and [Evaluation Metrics](docs/evaluation-metrics.md) for execution, resume, export, denominator, and confidence-interval details.
 
 ## Current Experimental Evidence
 
-**These results are preliminary and are based on a small controlled synthetic benchmark. They do not establish real-world marine or structural inspection performance.**
+**All results below are historical v1 engineering evidence. They are not confirmatory, publication-valid, or estimates under the v2 contract, and they do not establish real-world marine or structural inspection performance.**
 
-The registered `synthetic-controlled` v1.0 dataset contains 33 generated images with exact masks. Its leakage-safe balanced split contains 15 training, 6 validation, and 12 test images. The test set comprises three thin-crack, three pitting-cluster, three normal-texture, and three specular-highlight images: six anomaly-present and six clean/no-anomaly cases. Recorded duplicate, near-duplicate, and group leakage checks are zero.
+The registered `synthetic-controlled` v1.0 dataset contains 33 generated images with exact masks. Its historical balanced split contains 15 training, 6 validation, and 12 test images. The test set comprises three thin-crack, three pitting-cluster, three normal-texture, and three specular-highlight images: six anomaly-present and six clean/no-anomaly cases. The legacy registry reported zero within-dataset crossings under its implemented checks; this is not a general proof of near-duplicate independence.
 
 ### Baseline Comparison
 
-The following values are read from `SYN-BALANCED-001` version 1 (12 images; 48 stored rows). Top-\(K\) columns use six eligible anomaly-present images. Times are approximate per-image means on the recorded execution environment.
+The following values are read unchanged from `SYN-BALANCED-001` version 1 (12 images; 48 stored rows). Top-\(K\) columns use six historical recall-eligible images; contour and fixed-threshold outputs were not validly ranked under v2, so their Top-K values must not be used for future comparative claims. Times are approximate per-image means on the recorded execution environment.
 
 | Method | Top-1 / 3 / 5 / 8 recall | Precision | Proposal recall | False proposals/image | Mean time (s) |
 |---|---:|---:|---:|---:|---:|
@@ -101,12 +102,12 @@ Strict paired analysis finds the multi-scale fused and refined contextual method
 
 ### Ablation Evidence
 
-`ABL-SYN-BALANCED-001` version 1 contains 120 completed rows: 12 images evaluated under 10 configurations. Under the repository's documented balanced score, `ABL-RERANK-ONLY` is the strongest current configuration. Its aggregate proposal recall is 0.8500 compared with 0.7944 for `ABL-FULL`; the observed difference is concentrated in pitting-cluster recall (0.7000 versus 0.5889). Thin-crack recall remains 1.0000. Normal-texture false proposals remain zero, while specular-highlight false alarms remain unresolved at three proposals per image. This controlled result does not establish that reranking-only is generally superior.
+`ABL-SYN-BALANCED-001` version 1 contains 120 completed rows: 12 images evaluated under 10 configurations. The historical arbitrary balanced score placed `ABL-RERANK-ONLY`—descriptively, the **single-scale contextual classical baseline**—first. That score is deprecated as a selector and the study does not isolate a causal “reranking-only” effect. Its historical macro per-positive-image component recall is 0.8500 compared with 0.7944 for `ABL-FULL`; the observed difference is concentrated in three pitting-cluster images. Thin-crack recall remains 1.0000. Normal-texture false proposals remain zero, while specular-highlight false alarms remain unresolved at three proposals per image.
 
 | Configuration | Main observation |
 |---|---|
 | `ABL-FULL` | Reference refined configuration; recall 0.7944 and 0.75 false proposals/image. |
-| `ABL-RERANK-ONLY` | Highest current balanced score; improved pitting recall with unchanged thin-crack recall. |
+| `ABL-RERANK-ONLY` | Historical single-scale contextual classical baseline; highest exploratory v1 balanced score, without a causal or selection claim. |
 | `ABL-NO-TEXTURE` | Aggregate detection metrics match `ABL-FULL` on this benchmark. |
 | `ABL-NO-COLOUR` | Aggregate detection metrics match `ABL-FULL` on this benchmark. |
 | `ABL-NO-ENTROPY` | Aggregate detection metrics match `ABL-FULL` on this benchmark. |
@@ -116,9 +117,9 @@ Full tables are available in [Controlled Benchmark Results](docs/results/control
 
 ### Specular-Suppression Experiment
 
-`ABL-RERANK-SPECULAR-SUPPRESS` adds an opt-in, candidate-level optical likelihood model and conservative crack/pitting safeguards to rerank-only. In `SYN-SPECULAR-SUPPRESS-001` version 2 (12 images; 48 rows), specular-highlight false proposals decreased from 3.0 to 2.0 per image. Thin-crack Top-1 recall, proposal recall, and mean IoU remained 1.0000, 1.0000, and 0.9092; pitting recall remained 0.7000; normal-texture false proposals remained zero. Version 1 is retained as a negative pilot in which the initial threshold produced no reduction. The version 2 result meets the predeclared controlled criteria but is too small and synthetic to support a general claim. See [Specular Suppression](docs/results/specular-suppression.md).
+`ABL-RERANK-SPECULAR-SUPPRESS` is an opt-in historical experimental configuration and remains disabled by default. In `SYN-SPECULAR-SUPPRESS-001` version 2 (12 images; 48 rows), historical v1 metrics recorded a specular-highlight false-proposal decrease from 3.0 to 2.0 per image with the listed crack, pitting, and normal-texture quantities unchanged. Version 1 is retained as a negative pilot. Neither version validates suppression or supports choosing it for future work. See [Specular Suppression](docs/results/specular-suppression.md).
 
-The frozen method was subsequently evaluated on `synthetic-expanded` v1.0: 500 deterministic images, 10 balanced categories, and a leakage-free 100-image test split. In `SYN-EXPANDED-VALIDATION-001` v1, suppression reduced specular false proposals from 2.9 to 1.5 per image and preserved crack and pitting metrics, but lost one weld-disturbance image; aggregate recall fell from 0.82 to 0.80. The predeclared validation therefore **failed**, and no test-set retuning was performed. See [Expanded Synthetic Benchmark](docs/results/expanded-synthetic-benchmark.md).
+The method was subsequently compared on `synthetic-expanded` v1.0. A read-only audit now shows that all 80 pilot images recur byte-for-byte in the 500-image collection and 13 recur in the final test. The prior zero near-duplicate leakage statement was not established. `SYN-EXPANDED-VALIDATION-001` v1 is therefore a **historical engineering comparison — not confirmatory**. Its stored v1 values remain unchanged: specular false proposals fell from 2.9 to 1.5 per image, one weld-disturbance image was lost, and macro per-positive-image component recall fell from 0.82 to 0.80. See [Expanded Synthetic Benchmark](docs/results/expanded-synthetic-benchmark.md) and the [overlap audit](docs/audits/historical-dataset-overlap.md).
 
 ## Interface and Experimental Outputs
 
@@ -134,6 +135,7 @@ The repository does not currently include a complete, publication-ready interfac
 ├── region_proposal.py, scoring.py                    # proposal and ranking pipeline
 ├── dataset_intake.py, research_dataset.py            # dataset registration and splitting
 ├── registered_experiment.py, experiment_tracking.py  # execution and persistence
+├── scientific_contract/                               # prospective v2 evaluation/provenance
 ├── research_evaluation.py, research_analysis*.py     # evaluation and scientific analysis
 ├── ablation_study.py, synthetic_benchmark.py         # controlled studies
 ├── dataset_export.py, train.py, yolo_inference.py     # export and learning integration
@@ -158,7 +160,7 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 ## Reproducing the Controlled Benchmark
 
-Reproduction requires the registered dataset version, manifest hash, selected image IDs, split seed, experiment ID/version, code commit, matching thresholds, configuration snapshots, and environment metadata. An experiment plan records this identity but does not run the methods. Experiment execution reads the plan and writes persistent image-method result rows; CSV and JSON exports provide analysis-ready copies without replacing the database record.
+Historical reproduction is limited: v1 plans record part of this identity but do not fully prove the executed configuration or make every row reconstructible. Future reproduction requires the complete immutable v2 specification, content hashes, executed-configuration match, and append-only result identity described in [Scientific Contract V2](docs/scientific-contract-v2.md).
 
 The current controlled protocol uses `synthetic-controlled` v1.0, balanced split seed 42, and `SYN-BALANCED-001` version 1. Generated data and runtime databases are intentionally ignored by Git. Detailed steps are in [Experiments](docs/experiments.md).
 
@@ -172,7 +174,7 @@ Register such data through Research Dataset Intake, preserve source and licence 
 
 **Methodological limitations.** Classical and contextual proposals identify image irregularities; they do not provide certified diagnosis. Context rings may cross structural boundaries, and matching thresholds affect measured performance. Specular highlights remain a major false-positive mode, while pitting recall remains incomplete.
 
-**Benchmark limitations.** Both controlled benchmarks are synthetic. The expanded test improves category and parameter coverage but still reflects generator assumptions; descriptive confidence intervals do not establish real-world validity.
+**Benchmark limitations.** Both controlled benchmarks are synthetic. The expanded study overlaps its pilot 80/80 and its test 13/100, so it is not a protected confirmatory evaluation. The implemented historical perceptual-hash screen cannot establish zero near-duplicate leakage. Descriptive confidence intervals do not establish real-world validity.
 
 **Data limitations.** No real marine-field validation has been completed. Expert-reviewed, licensed structural datasets are not yet represented in the public repository.
 
@@ -182,7 +184,7 @@ Register such data through Research Dataset Intake, preserve source and licence 
 
 ### Immediate
 
-- retain `ABL-RERANK-ONLY` as an experimental candidate;
+- retain `ABL-RERANK-ONLY` only as a historical method ID and use “single-scale contextual classical baseline” for descriptive display;
 - investigate the recorded weld-disturbance suppression failure using development data only;
 - verify preservation of pitting recall and thin-crack localisation; and
 - repeat paired controlled evaluation.

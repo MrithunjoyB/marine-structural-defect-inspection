@@ -2,13 +2,13 @@
 
 ## Scope And Integrity
 
-This is synthetic validation, not real-world marine-inspection evidence. `synthetic-expanded` v1.0 contains 500 deterministic images across ten categories. An 80-image pilot (`synthetic-expanded-pilot`) first passed mask, metadata, uniqueness, balance, and visual-diversity checks. The final group-aware seed-42 split is exactly 300 train, 100 validation, and 100 test, with 30/10/10 images from every category, 50 positive and 50 clean test images, and zero exact-hash, near-duplicate, source, or template leakage.
+This is a **historical engineering comparison — not confirmatory**. It is synthetic and does not establish real-world marine-inspection evidence. `synthetic-expanded` v1.0 contains 500 deterministic images across ten categories and has a 300/100/100 seed-42 split. A read-only cross-dataset audit found that all 80 `synthetic-expanded-pilot` files recur byte-for-byte in the 500-image dataset: 51 in train, 16 in validation, and 13 in test. The historical “zero near-duplicate leakage” statement was not established by the implemented 64-bit perceptual-hash screen.
 
-`SYN-EXPANDED-VALIDATION-001` v1 freezes algorithm commit `71964778475d551444d356bdaa126f06c86bb0ef`, IoU 0.10, mask overlap 0.25, and maximum regions 8. All six methods completed the identical 100-image manifest: 600 expected rows, 600 completed rows, 600 unique image-method pairs, zero missing, unexpected, duplicate, or failed pairs.
+`SYN-EXPANDED-VALIDATION-001` v1 recorded algorithm commit `71964778475d551444d356bdaa126f06c86bb0ef`, IoU 0.10, mask overlap 0.25, and maximum regions 8. Its plan listed four base methods while six method IDs ultimately produced rows. All 600 historical image-method rows are present and unique, but plan, executed configuration, matching policy, code state, and rows are not immutably tied under the v2 contract.
 
-## Aggregate Results
+## Historical V1 Results
 
-Recall and IoU use only the 50 anomaly-present images. Clean-image recall is undefined.
+The table is preserved under `structvision-eval-v1-historical`. “Recall” is the historical macro per-positive-image component recall. Clean-image recall is undefined. Contour and fixed-threshold Top-K values are not valid under v2 because those outputs lacked a documented numeric ranking.
 
 | Method | Top-1 | Top-3 | Top-5 | Top-8 | Precision | Recall | Mean IoU | Best IoU | False/image | Time (s) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -53,4 +53,6 @@ Suppressed minus rerank-only paired means were -0.02 for Top-1/3/5/8 and proposa
 | Aggregate proposal recall does not decrease | 0.82 to 0.80 | **No** |
 | Processing-time increase below 15% | no increase observed | Yes |
 
-**Expanded synthetic validation failed.** The specular reduction generalized within this generator, but the mandatory aggregate-recall preservation criterion did not. The stored negative result is retained without test-set retuning. Further investigation must use development data, additional generator seeds, independently generated synthetic data, and eventually licensed expert-reviewed real imagery.
+The stored historical comparison failed its own macro per-positive-image component-recall preservation criterion. More importantly, pilot/test overlap prevents a confirmatory interpretation regardless of that outcome. The rows remain preserved without test-set retuning. Any future evaluation requires non-overlapping development and confirmatory data plus a new v2 specification and result store.
+
+See the [Historical Pilot/Final Dataset Overlap Audit](../audits/historical-dataset-overlap.md) for exact, perceptual-candidate, and declared-group findings.

@@ -2,9 +2,9 @@
 
 ## Scope And Reproducibility
 
-`ABL-SYN-BALANCED-001` version 1 evaluates 12 identical test images under 10 configurations, producing 120 completed automatic rows. Configurations use the same dataset version, split, selected images, matching thresholds, and seed. `ABL-FULL` equals the default refined contextual configuration.
+`ABL-SYN-BALANCED-001` version 1 evaluates 12 identical test images under 10 configurations, producing 120 completed historical v1 rows. The plan and snapshots record useful fields but do not satisfy the immutable v2 specification. `ABL-FULL` equals the default refined contextual configuration.
 
-The balanced score is the repository's configured weighted combination of precision, recall, Top-1 recall, mean IoU, and normalised false-proposal suppression. Rankings are specific to this benchmark and weighting.
+The balanced score is a deprecated historical exploratory field: an arbitrary weighted combination of precision, recall, Top-1 recall, mean IoU, and normalised false-proposal suppression. It is not the v2 primary endpoint and must not select a future method.
 
 ## Aggregate Leaderboard
 
@@ -31,10 +31,10 @@ Times are recorded means from one execution environment and are not portable per
 | `ABL-FULL` | 1.0000 | 0.5889 | 0.0 | 3.0 |
 | Other recorded configurations | 1.0000 | 0.5889 | 0.0 | 3.0 |
 
-The reranking-only configuration has the highest current balanced score because pitting-cluster recall increases while the displayed aggregate precision, false-proposal burden, and thin-crack recall remain unchanged. The result is based on three pitting images and should be treated as a candidate for further controlled evaluation, not as evidence of universal superiority.
+`ABL-RERANK-ONLY` is displayed descriptively as the **single-scale contextual classical baseline** while its stored ID remains unchanged. It has the highest historical exploratory balanced score, with a difference concentrated in three pitting images. Because disabling multi-scale fusion changes more than an isolated reranking factor and the v1 matcher/order contract is permissive, this is not a causal reranking result or a justified method-selection claim.
 
 ## Interpretation Limits
 
 Removing texture, colour, entropy, stability, border, boundary-edge, or coherence terms does not change aggregate detection metrics in this small benchmark. This may reflect redundant evidence, insensitive categories, limited sample size, or threshold effects. It does not prove that the components are unnecessary on real images. Specular-highlight false alarms remain unresolved across all recorded configurations.
 
-The next ablation phase should expand categories and seeds, retain strict image-level pairing, and report confidence intervals for configuration differences.
+A future ablation phase would require a new v2 specification, valid ranking declarations, strict one-to-one matching, non-overlapping development/confirmatory data, acquisition-group-aware intervals, and predeclared preservation margins.
