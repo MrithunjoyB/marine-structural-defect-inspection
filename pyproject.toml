@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "structvision"
+version = "1.0.0"
+description = "Write-free local API for the frozen StructVision classical anomaly-proposal baseline"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "Mrithunjoy Basumatary"}]
+dependencies = [
+  "numpy>=1.26.0",
+  "opencv-python>=4.9.0.80",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "build>=1.2"]
+
+[tool.setuptools]
+packages = ["structvision", "scientific_contract"]
+package-dir = {structvision = "src/structvision", scientific_contract = "scientific_contract"}
+py-modules = ["preprocess", "feature_extraction", "region_proposal", "scoring"]

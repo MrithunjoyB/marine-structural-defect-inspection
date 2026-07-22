@@ -52,3 +52,13 @@ The expanded comparison is classified as **historical engineering comparison —
 ## Future Execution Requirements
 
 A future rerun must create a new v2 specification and new v2 result database, use one-to-one matching, mark unordered methods Top-K-ineligible, validate canonical clean-image annotations, lock non-overlapping development and confirmatory data, and predeclare the false-proposal budget and category preservation margins. Historical rows must not be copied into the v2 schema as if they had been generated under v2 semantics.
+
+## Reusable V2 Executor
+
+`structvision.ExperimentExecutorV2` is the prospective execution path. It accepts an `ExperimentSpecificationV2` and ordered `ExperimentSample` records, verifies the specification hash and every selected image/ground-truth content hash, reconstructs `DetectorConfig` only from the frozen method payload, cross-checks the preprocessing/proposal/feature-scoring partitions, verifies the expected executed-configuration hash, and calls `StructuralAnomalyDetector.analyse` for every image-method pair.
+
+The executor converts returned masks to the existing v2 one-to-one mask-IoU evaluation policy. Ordering is image-major and then specification-method order. The current deterministic implementation requires one worker. Fail-fast is explicit; when disabled, analysis failures produce auditable failed rows and processing continues. Expected, attempted, completed, failed, and skipped counts are immutable and reconciled.
+
+No result is persisted unless a `ResultSink` is supplied. `MemoryResultSink` supports temporary lifecycle checks; `V2SQLiteResultSink` adapts the existing append-only v2 store at a caller-selected path. Neither executor path reads or writes the historical v1 databases, and neither uses `INSERT OR REPLACE`.
+
+The extraction work exercised this lifecycle only with temporary images, masks, specifications, and stores. It did not execute a registered benchmark or create permanent result rows.

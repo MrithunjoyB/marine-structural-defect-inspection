@@ -34,6 +34,8 @@ flowchart LR
 
 The Streamlit application exposes the proposal, review, dataset, and evaluation workflows through persistent navigation. Registered experiments can execute without manual image upload, and automatic results remain separate from manually reviewed records.
 
+The same frozen classical proposal implementation is also available through the local `structvision` Python package. Its core API is independent of Streamlit, databases, report writers, global output directories, session state, and paid inference services. Direct calls return masks, half-open bounding boxes, review-priority scores, heuristic mask reliability, diagnostics, and provenance in memory. See [Reusable API](docs/reusable-api.md) and [Architecture](docs/architecture.md).
+
 ## Methodology
 
 The proposal pipeline combines grayscale intensity, Canny edges, Sobel gradients, Laplacian response, local texture variation, local binary-pattern deviation, entropy-related evidence, foreground thresholding, and Lab-colour deviation. Overlapping patches at several spatial scales produce a dense anomaly field. Candidate components are filtered for area and border artefacts, split when internal heatmap evidence is incoherent, merged when spatially and visually compatible, and subjected to overlap suppression.
@@ -136,6 +138,7 @@ The repository does not currently include a complete, publication-ready interfac
 ├── dataset_intake.py, research_dataset.py            # dataset registration and splitting
 ├── registered_experiment.py, experiment_tracking.py  # execution and persistence
 ├── scientific_contract/                               # prospective v2 evaluation/provenance
+├── src/structvision/                                   # reusable write-free API and v2 executor
 ├── research_evaluation.py, research_analysis*.py     # evaluation and scientific analysis
 ├── ablation_study.py, synthetic_benchmark.py         # controlled studies
 ├── dataset_export.py, train.py, yolo_inference.py     # export and learning integration
@@ -151,6 +154,21 @@ source venv/bin/activate
 python3 -m pip install -r requirements.txt
 python3 -m streamlit run app.py
 ```
+
+For the reusable local package only:
+
+```bash
+python3 -m pip install .
+```
+
+```python
+from structvision import DetectorConfig, StructuralAnomalyDetector
+
+detector = StructuralAnomalyDetector(DetectorConfig())
+result = detector.analyse("inspection.png", image_id="frame-001")
+```
+
+NumPy arrays with three or four channels require an explicit colour-space declaration. RGBA/BGRA arrays additionally require explicit alpha handling. `analyse` performs no caller-visible writes unless a sink is explicitly injected.
 
 Run the test suite with:
 

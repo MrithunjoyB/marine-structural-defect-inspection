@@ -6,6 +6,8 @@ This document describes the implemented visual anomaly-proposal pipeline. The ce
 
 The application accepts common raster image formats. Configurable preprocessing includes resize, brightness and contrast adjustment, denoising, CLAHE enhancement, and sharpening. The processed BGR image is the common input for feature extraction and proposal generation; experiment configurations record the selected settings.
 
+The reusable API makes this boundary explicit. Filesystem images are decoded under OpenCV's BGR/BGRA contract. Three-channel NumPy arrays must declare `RGB` or `BGR`; four-channel arrays must declare `RGBA` or `BGRA` and an alpha rule. Grayscale arrays are unambiguous. Normalisation produces contiguous `uint8` BGR pixels before the protected preprocessing function is called.
+
 ## Feature Evidence
 
 `feature_extraction.py` derives complementary evidence rather than relying on one segmentation mask:
@@ -98,3 +100,11 @@ The effective likelihood is reduced by two structural safeguards. The crack safe
 ## Implementation Boundaries
 
 The proposal method does not estimate structural capacity, defect severity, material loss, or repair priority. Reported priority is a visual review order. Domain claims require licensed real data, expert ground truth, calibrated acquisition, and an appropriate engineering validation protocol.
+
+## Frozen Reusable Execution Contract
+
+`DetectorConfig` records every exposed preprocessing, feature, proposal, contextual, refinement, suppression, seed, determinism, and implementation-identity value. Constants that the protected v1 functions do not expose as arguments remain immutable implementation constants; their canonical digest is included in the configuration. Alternative scoring weights are rejected rather than silently ignored.
+
+`StructuralAnomalyDetector` calls the protected `apply_preprocessing`, `extract_feature_maps`, and `propose_regions` functions without copying or changing their mathematics. Because the protected proposal function materialises masks before returning them, the adapter redirects those unavoidable artifacts to one controlled temporary directory, reads the exact bytes into immutable records, and removes the directory before returning. No repository or caller output path is used.
+
+The parity fixtures compare direct and API execution with zero tolerance for boxes, ordering, discrete diagnostics, and mask bytes; accessible floating-point fields are compared exactly. Proposal priority and mask reliability remain heuristic quantities, not calibrated confidence. See [Reusable API](reusable-api.md).
