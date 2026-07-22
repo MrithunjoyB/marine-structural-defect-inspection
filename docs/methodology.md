@@ -87,6 +87,14 @@ The repository evaluates four proposal definitions:
 
 The baseline definitions are executed on identical registered images for paired analysis.
 
+### Normal-feature PatchCore baseline
+
+The separately installed normal-feature baseline uses the official Anomalib `2.5.1` PatchCore model with frozen `wide_resnet50_2` features from `layer2` and `layer3`. Clean training embeddings are reduced by the official k-center-greedy sampler and scored with exact Euclidean nearest-neighbour distance. The method returns a dense distance map; a separate validation-only artifact selects connected-component thresholds by clean false-proposal budgets.
+
+This is an external reference family, not the proposed hybrid method. Its upstream mathematics is not copied or modified, its scores are not probabilities, and it does not share evidence weights, proposals, or calibration with the classical path. Fixed preprocessing, high-resolution policy, coreset ratio, neighbour count, component rules, operating points, and provenance are documented in [Normal-Feature Baseline](normal-feature-baseline.md).
+
+The 256×416 letterbox was selected before anomaly evaluation using source geometry and reference-host memory constraints; no tiling comparison was conducted. The resulting same-cohort validation metrics are development diagnostics and must not be used to choose a winner or claim transferability.
+
 ## Ablation Controls
 
 `AblationConfig` provides opt-in switches for feature families, local contextual terms, stability, internal/boundary-edge evidence, border penalty, coherence, multi-scale fusion, merging, and refinement. `ABL-FULL` equals the normal default configuration. Ablation configurations reuse the proposal pipeline and store stable IDs and reproducibility snapshots; they are not independent reimplementations.
@@ -100,6 +108,8 @@ The effective likelihood is reduced by two structural safeguards. The crack safe
 ## Implementation Boundaries
 
 The proposal method does not estimate structural capacity, defect severity, material loss, or repair priority. Reported priority is a visual review order. Domain claims require licensed real data, expert ground truth, calibrated acquisition, and an appropriate engineering validation protocol.
+
+The normal-feature adapter is a separate path. Any future fusion of classical evidence with learned distances is a new algorithm requiring a new identifier, protected development work, and fresh calibration. No hybrid logic or professor-data evaluation is implemented here.
 
 ## Frozen Reusable Execution Contract
 

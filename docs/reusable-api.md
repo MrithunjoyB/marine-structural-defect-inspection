@@ -70,3 +70,27 @@ An explicitly injected `ArtifactSink` may receive an analysis result. `NullArtif
 ## Limitations
 
 The adapter intentionally preserves the protected v1 algorithm and its memory behavior. It does not provide parallel execution, physical scale, calibrated uncertainty, learned classification, real-world validation, or professor-data parsing. Large images can require several full-resolution feature maps and temporary visualisations. A future professor-data adapter must remain outside the detector core and supply explicit colour, image identity, provenance, and ground-truth semantics.
+
+## Optional Normal-Feature API
+
+The learned API is a separate, versioned development baseline:
+
+```python
+from structvision.normal_feature import NormalFeatureAnomalyDetector, NormalFeatureConfig
+
+detector = NormalFeatureAnomalyDetector(
+    NormalFeatureConfig(),
+    weight_file=verified_weight_path,
+    environment_lock_hash=lock_sha256,
+)
+model = detector.fit_normal(fit_samples, normal_fit_manifest_hash=manifest_hash)
+result = detector.analyse(
+    image,
+    image_id="development-image-001",
+    model_artifact=model,
+    calibration_artifact=calibration,
+    operating_point_id="fp-budget-0.50",
+)
+```
+
+The default call path is write-free. Explicit directory sinks are required to persist model or calibration artifacts. The input contract is RGB with deterministic aspect-preserving letterboxing; outputs contain a raw full-resolution PatchCore distance map and separately calibrated, unlabelled connected-component proposals. Learned distances are not probabilities and are not comparable to classical review-priority scores. See [the full learned contract](normal-feature-baseline.md).

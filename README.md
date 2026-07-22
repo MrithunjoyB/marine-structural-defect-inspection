@@ -34,7 +34,7 @@ flowchart LR
 
 The Streamlit application exposes the proposal, review, dataset, and evaluation workflows through persistent navigation. Registered experiments can execute without manual image upload, and automatic results remain separate from manually reviewed records.
 
-The same frozen classical proposal implementation is also available through the local `structvision` Python package. Its core API is independent of Streamlit, databases, report writers, global output directories, session state, and paid inference services. Direct calls return masks, half-open bounding boxes, review-priority scores, heuristic mask reliability, diagnostics, and provenance in memory. See [Reusable API](docs/reusable-api.md) and [Architecture](docs/architecture.md).
+The same frozen classical proposal implementation is also available through the local `structvision` Python package. Its core API is independent of Streamlit, databases, report writers, global output directories, session state, and paid inference services. Direct calls return masks, half-open bounding boxes, review-priority scores, heuristic mask reliability, diagnostics, and provenance in memory. A separately installed normal-feature package path adapts the official Anomalib PatchCore implementation without changing the classical path. See [Reusable API](docs/reusable-api.md), [Normal-Feature Baseline](docs/normal-feature-baseline.md), and [Architecture](docs/architecture.md).
 
 ## Methodology
 
@@ -79,13 +79,17 @@ These are engineering and research capabilities of the repository, not claims of
 
 Historical v1 plans and automatic rows remain under `structvision-eval-v1-historical`. Their matcher combines mask IoU, truth overlap, and a centroid fallback without one-to-one assignment, and historical baselines were not all validly ranked. Those rows retain their original meaning only.
 
-Future scientific experiments must use `structvision-eval-v2`: an immutable `ExperimentSpecificationV2`, strict one-to-one mask-IoU assignment, Top-K only for explicitly scored and deterministically ranked methods, canonical clean-image semantics, fail-closed executed-configuration verification, and a separate append-only result store. No future benchmark is run by this repair.
+Future scientific experiments must use `structvision-eval-v2`: an immutable `ExperimentSpecificationV2`, strict one-to-one mask-IoU assignment, Top-K only for explicitly scored and deterministically ranked methods, canonical clean-image semantics, fail-closed executed-configuration verification, and a separate append-only result store.
+
+The protected normal-feature work uses that contract only for a synthetic **development-only — non-confirmatory** matrix. It does not turn the cohort into a test set and does not revise, replace, or validate any historical row. Its [development-data protocol](docs/development-data-protocol.md) and [artifact identities](docs/results/normal-feature-development.md) are explicit.
 
 See [Experiments](docs/experiments.md) and [Evaluation Metrics](docs/evaluation-metrics.md) for execution, resume, export, denominator, and confidence-interval details.
 
 ## Current Experimental Evidence
 
 **All results below are historical v1 engineering evidence. They are not confirmatory, publication-valid, or estimates under the v2 contract, and they do not establish real-world marine or structural inspection performance.**
+
+A separate PatchCore normal-feature baseline has also been executed on a protected train/validation-only cohort. It is deliberately excluded from the historical table below: the same validation cohort was used for calibration and diagnostics, so the resulting component, pixel, and image metrics are development evidence rather than held-out estimates. The baseline shows lower clean proposal burden but misses all thin-crack components at its primary operating point; it supports no winner claim. See [Normal-Feature Development Results](docs/results/normal-feature-development.md), the [Model Card](docs/model-card-normal-feature-patchcore.md), and the [Data Card](docs/data-card-normal-feature-development.md).
 
 The registered `synthetic-controlled` v1.0 dataset contains 33 generated images with exact masks. Its historical balanced split contains 15 training, 6 validation, and 12 test images. The test set comprises three thin-crack, three pitting-cluster, three normal-texture, and three specular-highlight images: six anomaly-present and six clean/no-anomaly cases. The legacy registry reported zero within-dataset crossings under its implemented checks; this is not a general proof of near-duplicate independence.
 
@@ -138,7 +142,10 @@ The repository does not currently include a complete, publication-ready interfac
 ├── dataset_intake.py, research_dataset.py            # dataset registration and splitting
 ├── registered_experiment.py, experiment_tracking.py  # execution and persistence
 ├── scientific_contract/                               # prospective v2 evaluation/provenance
-├── src/structvision/                                   # reusable write-free API and v2 executor
+├── src/structvision/                                   # reusable APIs, protected adapter, and v2 executors
+│   └── normal_feature/                                 # optional official PatchCore adapter/artifacts
+├── development_data/                                  # protected canonical development manifest
+├── requirements/                                      # platform-specific learned-environment lock
 ├── research_evaluation.py, research_analysis*.py     # evaluation and scientific analysis
 ├── ablation_study.py, synthetic_benchmark.py         # controlled studies
 ├── dataset_export.py, train.py, yolo_inference.py     # export and learning integration
@@ -161,6 +168,18 @@ For the reusable local package only:
 python3 -m pip install .
 ```
 
+For the separate reproducible normal-feature development environment, use Python 3.12 on macOS arm64 and the complete PEP 751 lock. The package deliberately does not expose a conventional extra: the complete group/lock controls every transitive version, and the Python 3.12 package marker agrees with Anomalib's headless OpenCV instead of mixing it with desktop OpenCV:
+
+```bash
+python3.12 -m venv .venv-normal-feature
+source .venv-normal-feature/bin/activate
+python -m pip install -r requirements/pylock.normal-feature-macos-arm64.toml
+python -m pip install --no-deps .
+python cache_normal_feature_weight.py --cache-directory outputs/normal-feature-cache/huggingface/hub
+```
+
+No API key or commercial inference service is needed. Weight provenance, exact versions, integrity checks, and offline execution are documented in [Normal-Feature Baseline](docs/normal-feature-baseline.md).
+
 ```python
 from structvision import DetectorConfig, StructuralAnomalyDetector
 
@@ -181,6 +200,8 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 Historical reproduction is limited: v1 plans record part of this identity but do not fully prove the executed configuration or make every row reconstructible. Future reproduction requires the complete immutable v2 specification, content hashes, executed-configuration match, and append-only result identity described in [Scientific Contract V2](docs/scientific-contract-v2.md).
 
 The current controlled protocol uses `synthetic-controlled` v1.0, balanced split seed 42, and `SYN-BALANCED-001` version 1. Generated data and runtime databases are intentionally ignored by Git. Detailed steps are in [Experiments](docs/experiments.md).
+
+The normal-feature reference run is distinct and uses only the committed protected manifest. Run `normal_feature_development.py` inside the locked learned environment after explicitly caching and verifying the official weight. The script fits only `normal_fit`, calibrates only on `calibration_validation`, writes only to an explicit ignored output directory, and fails closed on identity drift.
 
 ## Using External or Professor-Provided Data
 
@@ -222,6 +243,8 @@ Register such data through Research Dataset Intake, preserve source and licence 
 
 ### Learning-Based Extension
 
+- treat the protected PatchCore implementation only as a baseline and preserve its failure cases;
+- design any classical/normal-feature hybrid as a new, separately versioned future algorithm;
 - evaluate SAM/SAM2-assisted mask refinement;
 - train YOLO detection or segmentation models after sufficient review; and
 - compare proposal-assisted annotation with conventional annotation effort.

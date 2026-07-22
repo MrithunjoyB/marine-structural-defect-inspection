@@ -39,6 +39,8 @@ Schema-version and migration-history rows document the v2 database layout. Forei
 
 This contract makes future evaluation defensible and future evidence reproducible. It does not repair historical metrics, establish publication readiness, validate any algorithm, or authorise a new experiment.
 
+The normal-feature reference matrix is a prospective v2 execution but remains **development-only — non-confirmatory** because its 72-image validation role supplies both calibration and diagnostics. Contract compliance establishes traceability and metric semantics; it does not establish independence, external validity, or a confirmatory claim.
+
 ## Executable API Binding
 
 The prospective executor binds the v2 contract to `structvision-classical-baseline-v1-frozen` version `1.0.0`. The method's frozen configuration payload is a complete canonical `DetectorConfig`; the separate preprocessing, proposal, and feature/scoring partitions must reproduce the same values. The executor rejects a different implementation identity, configuration hash, maximum proposal count, `structvision` seed, or deterministic-mode state before analysis.
@@ -46,5 +48,7 @@ The prospective executor binds the v2 contract to `structvision-classical-baseli
 Selected files are verified against their immutable encoded-content SHA-256 values before decoding. Ground-truth masks are resized only after encoded provenance verification, using nearest-neighbour interpolation to match the analysed image coordinate space. Returned proposal masks then enter `structvision-eval-v2` through the existing ranked `ProposalSet` and deterministic one-to-one matching policy.
 
 Execution has no implicit persistence. A null or absent result sink leaves no store. The explicit SQLite sink registers the immutable specification and appends one attempt plus its unique image-method rows through the existing v2 store. Reusing an attempt identity fails under append-only constraints. Historical v1 method IDs, databases, rows, and metric meanings are unchanged.
+
+`LearnedExperimentExecutorV2` extends this boundary for a strict paired matrix containing exactly the frozen classical method and the predeclared PatchCore baseline. It preserves the existing one-to-one matcher and row schema, records learned operating-point, calibration, and model identities in executed configuration, and writes through the existing append-only attempt store. It neither fuses the methods nor changes historical execution code. The completed development attempt contains 144 rows (72 per method), with no failures or skips; its immutable identities are listed in [Normal-Feature Development Results](results/normal-feature-development.md).
 
 See [Experiments](experiments.md) for the lifecycle and [Reusable API](reusable-api.md) for direct usage.

@@ -34,7 +34,7 @@ Attempt counters record expected, attempted, completed, failed, skipped, and uni
 
 `scientific_contract.result_store.V2ResultStore` creates a caller-selected side-by-side database. It uses transactions, foreign keys, uniqueness constraints, schema-version records, migration history, and plain append-only inserts. It has no overwrite, delete, result-reassignment, or in-place historical migration operation. Corrections are new rows linked by explicit supersession records.
 
-The v2 store is not wired to the historical Streamlit executor in this work package because no new benchmark execution is authorised. Tests exercise the complete specification, validation, and storage boundary only in temporary directories.
+The v2 store is not wired to the historical Streamlit executor. The separately authorised normal-feature development runner uses a caller-selected ignored v2 store and does not touch historical execution paths or databases.
 
 ## Historical Protocols
 
@@ -61,4 +61,19 @@ The executor converts returned masks to the existing v2 one-to-one mask-IoU eval
 
 No result is persisted unless a `ResultSink` is supplied. `MemoryResultSink` supports temporary lifecycle checks; `V2SQLiteResultSink` adapts the existing append-only v2 store at a caller-selected path. Neither executor path reads or writes the historical v1 databases, and neither uses `INSERT OR REPLACE`.
 
-The extraction work exercised this lifecycle only with temporary images, masks, specifications, and stores. It did not execute a registered benchmark or create permanent result rows.
+The original extraction work exercised this lifecycle only with temporary images, masks, specifications, and stores. The protected normal-feature development work below is a separate, explicitly non-confirmatory v2 execution.
+
+## Protected Normal-Feature Development Experiment
+
+`SYN-NORMAL-FEATURE-DEV-001` version 1 is the only new execution in this work. It is explicitly classified **development-only — non-confirmatory** and uses no historical test data. Its immutable manifest selects 91 clean `normal_fit` images and a disjoint 72-image `calibration_validation` role from train/validation metadata after exact, perceptual-candidate, source-group, and template-group exclusions.
+
+The run sequence is fixed:
+
+1. verify repository, registry, manifest, protected-file, environment-lock, and weight identities;
+2. fit the official PatchCore memory/coreset from `normal_fit` only;
+3. score validation maps and build a separate clean-false-proposal calibration artifact;
+4. freeze the `fp-budget-0.50` point in an `ExperimentSpecificationV2`;
+5. execute exactly one classical and one learned row for each validation image; and
+6. audit row pairing, counters, artifact replay, historical-store immutability, and protected-file hashes.
+
+Runtime artifacts are ignored. The committed manifest, lock, protocol, model/data cards, and descriptive results contain sufficient identities to reconstruct the run after separately acquiring the verified official weight. Commands and limitations are in [Normal-Feature Baseline](normal-feature-baseline.md); quantitative development diagnostics are in [Normal-Feature Development Results](results/normal-feature-development.md).

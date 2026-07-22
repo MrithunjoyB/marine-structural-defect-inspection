@@ -16,6 +16,22 @@ src/structvision/
 └── errors.py         typed fail-closed exceptions
 ```
 
+The optional learned path adds isolated modules without changing that classical dependency graph:
+
+```text
+src/structvision/
+├── development_protocol.py       read-only protected-cohort selection
+├── learned_executor.py           two-method v2 matrix adaptation
+└── normal_feature/
+    ├── configuration.py          one fixed development configuration
+    ├── preprocessing.py          aspect-preserving letterbox/inverse projection
+    ├── patchcore.py               lazy official Anomalib adapter
+    ├── model_artifact.py          immutable memory/coreset artifact
+    ├── calibration.py             separate clean-burden calibration artifact
+    ├── proposal_extraction.py     deterministic map-to-component policy
+    └── evaluation.py              dense development diagnostics
+```
+
 ## Dependency Direction
 
 `api.py` depends on input normalisation, immutable configuration/types, and the classical adapter. The adapter imports only the protected preprocessing, feature, scoring, and proposal modules at execution time; it does not import the Streamlit application. Core analysis has no dataset registry, historical database, report writer, session state, sidebar state, or global output path.
@@ -35,5 +51,11 @@ Deterministic generated fixtures cover clean texture, thin crack, pitting, weld 
 ## Package And UI Boundaries
 
 The existing Streamlit UI remains operational and unchanged. It continues to own uploads, feature-map persistence, ablation CSV output, manual review, reports, exports, optional YOLO integration, and historical registered-experiment controls. Those paths are not dependencies of the reusable package. Future UI migration can call the public API incrementally after a separate compatibility plan; it is not part of this extraction.
+
+## Normal-Feature Isolation Boundary
+
+Importing `structvision` or `structvision.normal_feature` does not import Torch, Anomalib, timm, Streamlit, or a database driver. Heavy learned dependencies are resolved lazily only when fitting or scoring is requested. The lightweight classical install is therefore unchanged. `NormalFeatureAnomalyDetector` verifies exact dependency versions, the pinned pretrained-weight hash, CPU reference policy, environment-lock hash, manifest identity, and artifact identity before calling the official Anomalib `PatchcoreModel` and `KCenterGreedy` components.
+
+Upstream owns embedding, coreset selection, nearest-neighbour distances, image scoring, and anomaly maps. StructVision owns protected cohort construction, letterboxing, provenance, immutable persistence, inverse projection, calibration, component extraction, and v2 row adaptation. Scores and proposal types never cross the frozen classical implementation boundary. See [Normal-Feature Baseline](normal-feature-baseline.md).
 
 See [Reusable API](reusable-api.md), [Methodology](methodology.md), and [Scientific Contract V2](scientific-contract-v2.md).
