@@ -13,10 +13,15 @@ dependencies = [
   "numpy>=1.26.0",
   "opencv-python>=4.9.0.80; python_version < '3.12'",
   "opencv-python-headless>=4.9.0.80; python_version >= '3.12'",
+  "Pillow>=10.3.0",
 ]
+
+[project.scripts]
+structvision-analyse = "structvision.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "build>=1.2"]
+demo = ["streamlit>=1.36.0"]
 
 # PEP 735 keeps the heavyweight learned environment outside ``pip install .``.
 # Install this group in the dedicated Python 3.12 environment, then install the

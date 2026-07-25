@@ -1,8 +1,24 @@
 # StructVision-AI
 
-**Human-in-the-Loop Visual Anomaly Proposal, Dataset Construction, and Reproducible Evaluation for Structural Surface Inspection**
+**Algorithm-First Visual Anomaly Proposal, Technical Review, and Reproducible Evaluation for Structural Surface Inspection**
 
 StructVision-AI is a research-oriented computer-vision framework for generating, ranking, reviewing, and evaluating visual anomaly proposals when task-specific labelled data are limited or unavailable. It integrates classical and contextual feature analysis, multi-scale proposal generation, segmentation-ready masks, human-in-the-loop annotation, registered dataset intake, leakage-safe splitting, reproducible batch experimentation, baseline comparison, category-wise analysis, bootstrap confidence intervals, configurable ablation studies, and optional downstream YOLO integration. The current system is an anomaly-proposal and dataset-construction environment; it is not a finished defect classifier or an engineering diagnostic system.
+
+## Professor-Ready Algorithm Demonstration
+
+The stable operational demonstration method is `structvision-classical-baseline-v1-frozen`. It runs locally in the base environment, requires no downloaded model, paid API, or API key, and remains the default because it preserves the strongest current sensitivity evidence. PatchCore is an optional protected development baseline. The proposal-guided hybrid is an optional **rejected development candidate**; its lower nuisance burden and higher precision/localisation did not satisfy the predeclared overall and image-level sensitivity-preservation rules.
+
+After base installation, the CLI is available. Install the optional local demo dependency for Streamlit:
+
+```bash
+structvision-analyse --input inspection.png --method classical
+python -m pip install '.[demo]'
+python -m streamlit run apps/professor_demo.py
+```
+
+The CLI and professor client analyse one image without a database or experiment-store write. Uploads are processed in memory, and exports require an explicit output option or download click. Current evidence is synthetic and development-only; real-data validation remains future work.
+
+Technical review: [Algorithm Specification](docs/algorithm-specification.md), [Pseudocode](docs/algorithm-pseudocode.md), [Code Guide](docs/code-structure-guide.md), [Professor Handoff](docs/professor-handoff.md), [Demonstration Runbook](docs/professor-demo-runbook.md), and [Research Evidence Summary](docs/research-evidence-summary.md).
 
 ## Abstract
 
@@ -34,7 +50,7 @@ flowchart LR
 
 The Streamlit application exposes the proposal, review, dataset, and evaluation workflows through persistent navigation. Registered experiments can execute without manual image upload, and automatic results remain separate from manually reviewed records.
 
-The same frozen classical proposal implementation is also available through the local `structvision` Python package. Its core API is independent of Streamlit, databases, report writers, global output directories, session state, and paid inference services. Direct calls return masks, half-open bounding boxes, review-priority scores, heuristic mask reliability, diagnostics, and provenance in memory. A separately installed normal-feature package path adapts the official Anomalib PatchCore implementation without changing the classical path. See [Reusable API](docs/reusable-api.md), [Normal-Feature Baseline](docs/normal-feature-baseline.md), and [Architecture](docs/architecture.md).
+The same frozen classical proposal implementation is also available through the local `structvision` Python package. Its core API is independent of Streamlit, databases, report writers, global output directories, session state, and paid inference services. Direct calls return masks, half-open bounding boxes, review-priority scores, heuristic mask reliability, diagnostics, and provenance in memory. A separately installed normal-feature package path adapts the official Anomalib PatchCore implementation without changing the classical path. See [Reusable API](docs/reusable-api.md), [Normal-Feature Baseline](docs/normal-feature-baseline.md), [Algorithm Specification](docs/algorithm-specification.md), and [Architecture](docs/architecture.md).
 
 ## Methodology
 
@@ -138,11 +154,12 @@ The repository does not currently include a complete, publication-ready interfac
 ```text
 .
 ├── app.py, preprocess.py, feature_extraction.py      # application and image processing
+├── apps/professor_demo.py                             # isolated thin algorithm demonstration client
 ├── region_proposal.py, scoring.py                    # proposal and ranking pipeline
 ├── dataset_intake.py, research_dataset.py            # dataset registration and splitting
 ├── registered_experiment.py, experiment_tracking.py  # execution and persistence
 ├── scientific_contract/                               # prospective v2 evaluation/provenance
-├── src/structvision/                                   # reusable APIs, protected adapter, and v2 executors
+├── src/structvision/                                  # reusable APIs, demo facade, protected adapter, v2 executors
 │   └── normal_feature/                                 # optional official PatchCore adapter/artifacts
 ├── development_data/                                  # protected canonical development manifest
 ├── requirements/                                      # platform-specific learned-environment lock
@@ -166,6 +183,7 @@ For the reusable local package only:
 
 ```bash
 python3 -m pip install .
+structvision-analyse --input inspection.png --method classical
 ```
 
 For the separate reproducible normal-feature development environment, use Python 3.12 on macOS arm64 and the complete PEP 751 lock. The package deliberately does not expose a conventional extra: the complete group/lock controls every transitive version, and the Python 3.12 package marker agrees with Anomalib's headless OpenCV instead of mixing it with desktop OpenCV:
@@ -209,7 +227,7 @@ The separate proposal-guided hybrid work package is complete. It uses [protocol 
 
 **Do not commit professor-provided, private, restricted, or unlicensed images to the public repository.**
 
-Register such data through Research Dataset Intake, preserve source and licence metadata, and leave redistribution disabled unless permission is explicit. Raw files, annotations, reports, and registries belong in ignored runtime directories. Final quantitative evaluation should use verified or reviewer-estimated ground truth with clearly recorded provenance. See [Dataset Management](docs/dataset-management.md).
+Connect future private data through a separately authorised adapter, preserve source and licence metadata, and leave redistribution disabled unless permission is explicit. Private paths and metadata must remain outside Git. Raw files, annotations, reports, and registries belong in ignored runtime directories. Final quantitative evaluation requires a predeclared prospective protocol and verified or reviewer-estimated ground truth with clearly recorded provenance. See [Professor Data Adapter](docs/professor-data-adapter.md) and [Dataset Management](docs/dataset-management.md).
 
 ## Limitations
 
