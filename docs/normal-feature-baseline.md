@@ -2,7 +2,7 @@
 
 ## Scope
 
-`structvision-patchcore-baseline-v1-dev` is a recognised modern baseline, not the proposed StructVision hybrid contribution. It was fitted and calibrated only on the protected development cohort. It has not used a historical test split, professor-provided data, or real marine imagery, and it supports no confirmatory or transferability claim.
+`structvision-patchcore-baseline-v1-dev` is a recognised modern baseline, not the proposed StructVision hybrid contribution. It was fitted and calibrated only on the protected development cohort. It has not used a historical test split, externally provided data, or real marine imagery, and it supports no confirmatory or transferability claim.
 
 PatchCore was selected before development scoring because its published method directly matches this work package's needs: normal-only fitting, frozen pretrained patch features, an explicit representative memory bank/coreset, dense localisation distances, and an image anomaly score without a task-specific defect classifier. It is therefore an informative reference family against the frozen classical proposal path while remaining conceptually distinct from the later hybrid. The paper reference is Roth et al., [“Towards Total Recall in Industrial Anomaly Detection,” CVPR 2022](https://openaccess.thecvf.com/content/CVPR2022/html/Roth_Towards_Total_Recall_in_Industrial_Anomaly_Detection_CVPR_2022_paper.html).
 

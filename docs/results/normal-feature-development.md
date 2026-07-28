@@ -2,7 +2,7 @@
 
 ## Status
 
-`SYN-NORMAL-FEATURE-DEV-001` version 1 is **development-only — non-confirmatory**. It used the same 72 protected validation images for calibration and development diagnostics. It is synthetic, does not estimate out-of-sample performance, and supports no winning-method, transferability, publication-readiness, real-world, hybrid, or professor-data claim.
+`SYN-NORMAL-FEATURE-DEV-001` version 1 is **development-only — non-confirmatory**. It used the same 72 protected validation images for calibration and development diagnostics. It is synthetic, does not estimate out-of-sample performance, and supports no winning-method, transferability, publication-readiness, real-world, hybrid, or private-data claim.
 
 The reference run completed 144/144 `scientific-result-v2` rows: 72 images × the frozen classical method and the predeclared PatchCore method. Every image has exactly one row per method, all rows use `structvision-eval-v2`, and the append-only attempt has zero failures/skips.
 
@@ -77,4 +77,4 @@ PatchCore reduces nuisance proposal burden and shows development complementarity
 
 ## Integrity audit
 
-Historical automatic rows remain exactly 888. Historical database SHA-256 values remain `1ebde1de…ce92` and `9a77d748…f640`; registry database/manifest hashes remain `50513870…4632` and `bc266fca…7ba4`. All seven protected classical source hashes remain unchanged. No historical test image, specular-retuning cohort, professor data, hybrid fusion, deprecated balanced score, or MPS scientific result was used.
+Historical automatic rows remain exactly 888. Historical database SHA-256 values remain `1ebde1de…ce92` and `9a77d748…f640`; registry database/manifest hashes remain `50513870…4632` and `bc266fca…7ba4`. All seven protected classical source hashes remain unchanged. No historical test image, specular-retuning cohort, private collaborator data, hybrid fusion, deprecated balanced score, or MPS scientific result was used.

@@ -18,7 +18,7 @@ from structvision import (
     candidate_rows,
     demonstration_fixture,
 )
-from structvision import professor_console
+from structvision import live_console
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +43,7 @@ def fixture_bytes() -> bytes:
     return buffer.getvalue()
 
 
-class ProfessorConsoleTests(unittest.TestCase):
+class LiveConsoleTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(
             dir=Path(tempfile.gettempdir()).resolve()
@@ -60,7 +60,7 @@ class ProfessorConsoleTests(unittest.TestCase):
         stdout = StringIO()
         stderr = StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            status = professor_console.main(
+            status = live_console.main(
                 [
                     "--input",
                     str(self.input),
@@ -72,7 +72,7 @@ class ProfessorConsoleTests(unittest.TestCase):
         return status, stdout.getvalue(), stderr.getvalue(), selected
 
     def test_wrapper_imports_only_public_structvision_interface(self):
-        path = ROOT / "src" / "structvision" / "professor_console.py"
+        path = ROOT / "src" / "structvision" / "live_console.py"
         tree = ast.parse(path.read_text(encoding="utf-8"))
         structvision_imports = []
         for node in ast.walk(tree):
@@ -91,7 +91,7 @@ class ProfessorConsoleTests(unittest.TestCase):
 
     def test_wrapper_contains_no_detector_math_network_install_or_download(self):
         source = (
-            ROOT / "src" / "structvision" / "professor_console.py"
+            ROOT / "src" / "structvision" / "live_console.py"
         ).read_text(encoding="utf-8")
         for forbidden in (
             "apply_preprocessing",
@@ -105,7 +105,7 @@ class ProfessorConsoleTests(unittest.TestCase):
             "hf_hub_download",
         ):
             self.assertNotIn(forbidden, source)
-        launcher = (ROOT / "scripts" / "run_professor_demo.sh").read_text(
+        launcher = (ROOT / "scripts" / "run_live_demo.sh").read_text(
             encoding="utf-8"
         )
         for forbidden_command in ("pip ", "curl ", "wget ", "git clone"):
@@ -113,11 +113,11 @@ class ProfessorConsoleTests(unittest.TestCase):
 
     def test_output_directory_is_required_and_default_method_is_fixed(self):
         with self.assertRaises(SystemExit) as raised:
-            professor_console.build_parser().parse_args(
+            live_console.build_parser().parse_args(
                 ["--input", str(self.input)]
             )
-        self.assertEqual(raised.exception.code, professor_console.EXIT_USAGE)
-        help_text = professor_console.build_parser().format_help()
+        self.assertEqual(raised.exception.code, live_console.EXIT_USAGE)
+        help_text = live_console.build_parser().format_help()
         self.assertNotIn("--method", help_text)
         self.assertIn("stable frozen", help_text)
 
@@ -127,11 +127,11 @@ class ProfessorConsoleTests(unittest.TestCase):
         marker = output / "keep.txt"
         marker.write_text("keep", encoding="utf-8")
         with patch.object(
-            professor_console,
+            live_console,
             "analyse_demonstration_image",
         ) as detector:
             status, _stdout, stderr, _ = self.run_console(output)
-        self.assertEqual(status, professor_console.EXIT_OUTPUT_EXISTS)
+        self.assertEqual(status, live_console.EXIT_OUTPUT_EXISTS)
         self.assertIn("Output protection", stderr)
         detector.assert_not_called()
         self.assertEqual(marker.read_text(encoding="utf-8"), "keep")
@@ -142,14 +142,14 @@ class ProfessorConsoleTests(unittest.TestCase):
             for path in self.root.rglob("*")
             if path.is_file()
         }
-        original = professor_console.analyse_demonstration_image
+        original = live_console.analyse_demonstration_image
         with patch.object(
-            professor_console,
+            live_console,
             "analyse_demonstration_image",
             wraps=original,
         ) as detector:
             status, stdout, stderr, output = self.run_console()
-        self.assertEqual(status, professor_console.EXIT_SUCCESS, stderr)
+        self.assertEqual(status, live_console.EXIT_SUCCESS, stderr)
         detector.assert_called_once()
         self.assertEqual(
             detector.call_args.kwargs["method_id"],
@@ -167,7 +167,7 @@ class ProfessorConsoleTests(unittest.TestCase):
         )
         self.assertIn("Measured processing stages:", stdout)
         self.assertIn("Selected proposals:", stdout)
-        self.assertIn(professor_console.SCORE_WARNING, stdout)
+        self.assertIn(live_console.SCORE_WARNING, stdout)
         self.assertNotIn(str(self.root), stdout)
         self.assertFalse((output / "PROCESSING" / ".runtime").exists())
 
@@ -186,7 +186,7 @@ class ProfessorConsoleTests(unittest.TestCase):
             "OUTPUT/result.json",
             "OUTPUT/technical-summary.txt",
             "RUN_MANIFEST.json",
-            professor_console.OWNERSHIP_MARKER_NAME,
+            live_console.OWNERSHIP_MARKER_NAME,
             "CONSOLE_LOG.txt",
         }
         actual = {
@@ -197,6 +197,24 @@ class ProfessorConsoleTests(unittest.TestCase):
         self.assertTrue(required <= actual)
         manifest = json.loads(
             (output / "RUN_MANIFEST.json").read_text(encoding="utf-8")
+        )
+        marker = json.loads(
+            (output / live_console.OWNERSHIP_MARKER_NAME).read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            marker["schema_version"],
+            "structvision-live-console-run-owner-v1",
+        )
+        self.assertEqual(marker["tool_identity"], "structvision-live-demo")
+        self.assertEqual(
+            marker["run_manifest_schema"],
+            "structvision-live-run-manifest-v1",
+        )
+        self.assertEqual(
+            manifest["schema_version"],
+            "structvision-live-run-manifest-v1",
         )
         self.assertEqual(manifest["detector_execution_count"], 1)
         self.assertEqual(
@@ -313,9 +331,9 @@ class ProfessorConsoleTests(unittest.TestCase):
         first, _stdout, _stderr, _ = self.run_console(output)
         second, _stdout, _stderr, _ = self.run_console(output)
         third, _stdout, stderr, _ = self.run_console(output, "--overwrite")
-        self.assertEqual(first, professor_console.EXIT_SUCCESS)
-        self.assertEqual(second, professor_console.EXIT_OUTPUT_EXISTS)
-        self.assertEqual(third, professor_console.EXIT_SUCCESS, stderr)
+        self.assertEqual(first, live_console.EXIT_SUCCESS)
+        self.assertEqual(second, live_console.EXIT_OUTPUT_EXISTS)
+        self.assertEqual(third, live_console.EXIT_SUCCESS, stderr)
         invalid = self.root / "bad.png"
         invalid.write_bytes(b"not an image")
         prior = self.input
@@ -326,7 +344,7 @@ class ProfessorConsoleTests(unittest.TestCase):
             )
         finally:
             self.input = prior
-        self.assertEqual(status, professor_console.EXIT_INPUT)
+        self.assertEqual(status, live_console.EXIT_INPUT)
 
 
 if __name__ == "__main__":

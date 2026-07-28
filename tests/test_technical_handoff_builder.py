@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 import zipfile
 
-from scripts import build_professor_handoff as builder
+from scripts import build_technical_handoff as builder
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +18,7 @@ def create_minimal_bundle(
     *,
     extra: dict[str, bytes] | None = None,
 ) -> Path:
-    bundle = root / "StructVision-AI-Professor-Handoff"
+    bundle = root / "StructVision-AI-Technical-Handoff"
     bundle.mkdir()
     for relative in sorted(builder.REQUIRED_RELATIVE_FILES):
         if relative in {builder.VERSION_FILE, builder.CHECKSUM_FILE}:
@@ -56,10 +56,10 @@ def create_minimal_bundle(
     return bundle
 
 
-class ProfessorHandoffBuilderTests(unittest.TestCase):
+class TechnicalHandoffBuilderTests(unittest.TestCase):
     def test_builder_uses_git_archive_and_never_recursive_worktree_copy(self):
         source = (
-            ROOT / "scripts" / "build_professor_handoff.py"
+            ROOT / "scripts" / "build_technical_handoff.py"
         ).read_text(encoding="utf-8")
         self.assertIn('"archive"', source)
         self.assertIn('"HEAD"', source)

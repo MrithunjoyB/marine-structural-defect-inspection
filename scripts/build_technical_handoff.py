@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and verify the clean offline StructVision-AI professor handoff.
+"""Build and verify the clean offline StructVision-AI technical handoff.
 
 The source ZIP is produced by ``git archive HEAD``. Runtime folders, ignored
 data, environments, learned artifacts, and historical stores are never copied
@@ -30,7 +30,7 @@ from PIL import Image, PngImagePlugin
 from structvision import __version__, demonstration_fixture
 
 
-BUNDLE_NAME = "StructVision-AI-Professor-Handoff"
+BUNDLE_NAME = "StructVision-AI-Technical-Handoff"
 CHECKSUM_FILE = "CHECKSUMS.sha256"
 VERSION_FILE = "VERSION.txt"
 SOURCE_ARCHIVE_PREFIX = "structvision-source-"
@@ -46,13 +46,14 @@ REQUIRED_RELATIVE_FILES = frozenset(
         "INPUT/YOUR_IMAGE_HERE.txt",
         "EXAMPLE_OUTPUT/RUN_MANIFEST.json",
         "EXAMPLE_OUTPUT/CONSOLE_LOG.txt",
+        "EXAMPLE_OUTPUT/.structvision-live-console-owner.json",
         "DOCUMENTATION/block-diagram.svg",
         "DOCUMENTATION/block-diagram.html",
-        "DOCUMENTATION/professor-console-handoff.html",
+        "DOCUMENTATION/technical-handoff.html",
         "DOCUMENTATION/algorithm-specification.md",
         "DOCUMENTATION/algorithm-pseudocode.md",
         "DOCUMENTATION/code-structure-guide.md",
-        "DOCUMENTATION/professor-handoff.md",
+        "DOCUMENTATION/technical-handoff.md",
         "SOURCE/source-manifest.txt",
         "INSTALLATION/macOS.md",
         "INSTALLATION/Linux.md",
@@ -126,7 +127,7 @@ class HandoffError(RuntimeError):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a small committed-source professor handoff or verify an "
+            "Build a small committed-source technical handoff or verify an "
             "existing handoff without network access."
         )
     )
@@ -240,7 +241,7 @@ def _fixture_png() -> bytes:
     fixture = demonstration_fixture(FIXTURE_LABEL)
     metadata = PngImagePlugin.PngInfo()
     values = {
-        "artifact_role": "synthetic professor demonstration fixture",
+        "artifact_role": "synthetic technical demonstration fixture",
         "fixture_label": FIXTURE_LABEL,
         "research_cohort_status": "excluded from every research cohort",
         "evidence_status": "not real inspection evidence",
@@ -261,7 +262,7 @@ def _fixture_png() -> bytes:
 
 
 def _readme_markdown(commit: str) -> str:
-    return f"""# StructVision-AI Professor Handoff
+    return f"""# StructVision-AI Technical Handoff
 
 Open `README_FIRST.html` for the offline visual guide.
 
@@ -274,7 +275,7 @@ example run of `structvision-classical-baseline-v1-frozen`.
 ## Four distinct uses
 
 1. **Live demonstration on Mrithunjoy's prepared Mac** — activate the prepared
-   environment and run `RUN_DEMO.sh`, or use `structvision-professor-demo`
+   environment and run `RUN_DEMO.sh`, or use `structvision-live-demo`
    directly. This is the reliable presentation route.
 2. **Source/code review from this drive** — inspect `SOURCE/` and
    `DOCUMENTATION/`; verify hashes first.
@@ -290,8 +291,8 @@ example run of `structvision-classical-baseline-v1-frozen`.
 From the matching checked-out repository:
 
 ```bash
-python scripts/build_professor_handoff.py \
-  --verify "/path/to/StructVision-AI-Professor-Handoff"
+python scripts/build_technical_handoff.py \
+  --verify "/path/to/StructVision-AI-Technical-Handoff"
 ```
 
 Expected: `Verification passed`, the commit identity, file count, and bundle
@@ -316,7 +317,7 @@ alter the handoff.
 - Copy the one handoff directory, not the working repository or virtual
   environment.
 - Eject the drive safely and verify the copied directory again.
-- Confirm no private/professor image was substituted into `INPUT/`.
+- Confirm no private or externally supplied image was substituted into `INPUT/`.
 - Keep temporary non-fixture runs outside the immutable handoff.
 
 ## Retention
@@ -335,7 +336,7 @@ def _readme_html(commit: str) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StructVision-AI Professor Handoff — Read First</title>
+  <title>StructVision-AI Technical Handoff — Read First</title>
   <style>
     *{{box-sizing:border-box}} body{{margin:0;background:#f2f6f6;color:#173941;font:16px/1.55 Arial,Helvetica,sans-serif}}
     main{{width:min(980px,calc(100% - 32px));margin:36px auto}} header,section{{background:#fff;border:1px solid #ccd8da;border-radius:14px;padding:26px;margin:0 0 18px}}
@@ -356,11 +357,11 @@ def _readme_html(commit: str) -> str:
     <div class="mode"><strong>3. Another machine</strong><p>Follow <code>INSTALLATION/</code>. Compatible dependencies must be installed; no virtual environment is bundled.</p></div>
     <div class="mode"><strong>4. Future wheelhouse</strong><p>A macOS-arm64 offline wheelhouse is not included and requires a separate licence, size, Python, OS, and architecture audit.</p></div>
   </div></section>
-  <section><h2>Verify first</h2><pre><code>python scripts/build_professor_handoff.py \\
-  --verify "/path/to/StructVision-AI-Professor-Handoff"</code></pre>
+  <section><h2>Verify first</h2><pre><code>python scripts/build_technical_handoff.py \\
+  --verify "/path/to/StructVision-AI-Technical-Handoff"</code></pre>
     <p>Stop if verification reports a changed, missing, unexpected, prohibited, or wrong-commit file.</p></section>
   <section><h2>Start here</h2><ul>
-    <li><a href="DOCUMENTATION/professor-console-handoff.html">Open the complete offline professor guide</a></li>
+    <li><a href="DOCUMENTATION/technical-handoff.html">Open the complete offline technical guide</a></li>
     <li><a href="DOCUMENTATION/block-diagram.html">Open the block diagram</a></li>
     <li>Review the completed run in <code>EXAMPLE_OUTPUT/</code></li>
     <li>Read <code>VERSION.txt</code>, <code>CHECKSUMS.sha256</code>, and <code>SOURCE/source-manifest.txt</code></li>
@@ -377,8 +378,8 @@ bundle_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 fixture="$bundle_dir/INPUT/demonstration-fixture.png"
 output_base=${STRUCTVISION_DEMO_OUTPUT_BASE:-"$PWD/StructVision-Demo-Runs"}
 
-command -v structvision-professor-demo >/dev/null 2>&1 || {
-  echo "structvision-professor-demo is not installed in the active environment." >&2
+command -v structvision-live-demo >/dev/null 2>&1 || {
+  echo "structvision-live-demo is not installed in the active environment." >&2
   echo "Use Mrithunjoy's prepared Mac environment or follow INSTALLATION/." >&2
   exit 4
 }
@@ -386,7 +387,7 @@ command -v structvision-professor-demo >/dev/null 2>&1 || {
 mkdir -p -- "$output_base"
 timestamp=$(date -u '+%Y%m%dT%H%M%SZ')
 output_dir="$output_base/demo-run-$timestamp"
-structvision-professor-demo --input "$fixture" --output-dir "$output_dir"
+structvision-live-demo --input "$fixture" --output-dir "$output_dir"
 echo
 echo "Completed output folder: $output_dir"
 """
@@ -396,7 +397,7 @@ def _input_note() -> str:
     return """Place no private image in the immutable verified handoff.
 
 For an authorised local demonstration, copy a PNG/JPEG/TIFF to a separate
-working folder and pass its path to `structvision-professor-demo --input`.
+working folder and pass its path to `structvision-live-demo --input`.
 
 For alpha-bearing input, explicitly select one:
   --alpha-handling drop
@@ -419,7 +420,7 @@ cd StructVision-source
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install .
-structvision-professor-demo --help
+structvision-live-demo --help
 ```
 
 Dependency resolution may require network access on a new machine. The
@@ -443,7 +444,7 @@ cd StructVision-source
 python3 -m venv venv
 . venv/bin/activate
 python -m pip install .
-structvision-professor-demo --help
+structvision-live-demo --help
 ```
 
 Use platform-compatible Python and OpenCV system/runtime dependencies. Initial
@@ -460,7 +461,7 @@ def _requirements_note() -> str:
 - Base dependencies: authoritative declarations are in the source
   `pyproject.toml`.
 - No virtual environment, package cache, model weight, learned memory bank,
-  database, private image, or professor data is included.
+  database, private image, or private collaborator data is included.
 - The prepared Mac and a newly installed machine are different operating
   contexts. Source availability does not guarantee immediate execution.
 - PatchCore and hybrid require a separate exact Python 3.12 learned environment
@@ -520,7 +521,7 @@ def _source_manifest(archive: Path, commit: str, branch: str) -> str:
         "EXCLUSION AUDIT: PASS",
         "Excluded by construction: .git; virtual environments; Python/test caches;",
         "database files; historical result stores; model weights; learned memories;",
-        "learned caches; ignored synthetic bulk images; private images; professor data;",
+        "learned caches; ignored synthetic bulk images; private images; private collaborator data;",
         "OS metadata; unrelated logs; unrelated projects.",
         "",
         "ARCHIVE MEMBERS (sorted)",
@@ -540,7 +541,7 @@ def _run_example(root: Path, fixture: Path, output: Path) -> None:
         [
             sys.executable,
             "-m",
-            "structvision.professor_console",
+            "structvision.live_console",
             "--input",
             str(fixture),
             "--output-dir",
@@ -590,7 +591,7 @@ def _version_text(
     bundle_size: int,
 ) -> str:
     return (
-        "StructVision-AI Professor Handoff\n"
+        "StructVision-AI Technical Handoff\n"
         f"package_version={__version__}\n"
         f"git_commit={commit}\n"
         f"git_branch={branch}\n"
@@ -819,7 +820,7 @@ def build_handoff(output: Path) -> tuple[Path, str, int, int]:
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(
         tempfile.mkdtemp(
-            prefix=".structvision-professor-handoff-",
+            prefix=".structvision-technical-handoff-",
             dir=target.parent,
         )
     )
@@ -834,17 +835,17 @@ def build_handoff(output: Path) -> tuple[Path, str, int, int]:
         _write(bundle / "INPUT" / "YOUR_IMAGE_HERE.txt", _input_note())
 
         documentation = {
-            "professor-console-block-diagram.svg": "block-diagram.svg",
-            "professor-console-block-diagram.html": "block-diagram.html",
-            "professor-console-handoff.html": "professor-console-handoff.html",
+            "live-console-block-diagram.svg": "block-diagram.svg",
+            "live-console-block-diagram.html": "block-diagram.html",
+            "technical-handoff.html": "technical-handoff.html",
             "algorithm-specification.md": "algorithm-specification.md",
             "algorithm-pseudocode.md": "algorithm-pseudocode.md",
             "code-structure-guide.md": "code-structure-guide.md",
-            "professor-handoff.md": "professor-handoff.md",
+            "technical-handoff.md": "technical-handoff.md",
         }
         for source_name, target_name in documentation.items():
             replacements = {
-                "professor-console-block-diagram.svg": "block-diagram.svg"
+                "live-console-block-diagram.svg": "block-diagram.svg"
             }
             _copy_text(
                 root / "docs" / source_name,
@@ -921,7 +922,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Bundle size: {size} bytes")
             return 0
         target, commit, count, size = build_handoff(arguments.output)
-        print("Professor handoff built and verified")
+        print("Technical handoff built and verified")
         print(f"Output     : {target}")
         print(f"Git commit : {commit}")
         print(f"File count : {count}")

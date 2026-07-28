@@ -1,8 +1,8 @@
-# Future Professor Data-Adapter Contract
+# Private Dataset Adapter Contract
 
 ## Status
 
-This is an interface and secure-intake specification only. No professor data, private path, credential, storage integration, or adapter implementation is included.
+This is an interface and secure-intake specification only. No private collaborator data, private path, credential, storage integration, or adapter implementation is included.
 
 ## Boundary
 
@@ -10,7 +10,7 @@ This is an interface and secure-intake specification only. No professor data, pr
 from collections.abc import Iterable, Mapping
 from typing import Protocol
 
-class ProfessorDatasetAdapter(Protocol):
+class PrivateDatasetAdapter(Protocol):
     def samples(self) -> Iterable["SampleRecord"]: ...
     def open_image(self, sample: "SampleRecord") -> "ImageData": ...
     def ground_truth(self, sample: "SampleRecord") -> "GroundTruth | None": ...

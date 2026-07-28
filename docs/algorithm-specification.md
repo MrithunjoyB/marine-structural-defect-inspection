@@ -4,13 +4,13 @@
 
 StructVision-AI produces ranked visual-anomaly region proposals from one structural or surface image. A proposal identifies pixels that differ from their image context; it is not a defect class, probability, engineering diagnosis, or disposition decision.
 
-The accepted software component is the reusable, write-free Python API. Its stable method is `structvision-classical-baseline-v1-frozen`. `structvision-patchcore-baseline-v1-dev` is a protected development baseline. `structvision-proposal-guided-hybrid-v1-dev` is a **development candidate rejected under the predeclared protocol**. Professor-data validation is future work.
+The accepted software component is the reusable, write-free Python API. Its stable method is `structvision-classical-baseline-v1-frozen`. `structvision-patchcore-baseline-v1-dev` is a protected development baseline. `structvision-proposal-guided-hybrid-v1-dev` is a **development candidate rejected under the predeclared protocol**. Private-data validation is future work.
 
 ## 2. Inputs
 
 The base detector accepts a filesystem image path or `uint8` NumPy array. Arrays must declare `RGB` or `BGR` for three channels and `RGBA` or `BGRA` plus `drop`, `composite_black`, or `composite_white` for four channels. Grayscale is unambiguous.
 
-The professor facade accepts one PNG, JPEG, or safely supported TIFF as bytes. It checks encoded size, decoded dimensions, format/suffix agreement, channel semantics, alpha semantics, malformed input, and decompression-bomb warnings before producing an in-memory BGR array. High-bit-depth inputs are rejected by the current `uint8` contract.
+The demonstration facade accepts one PNG, JPEG, or safely supported TIFF as bytes. It checks encoded size, decoded dimensions, format/suffix agreement, channel semantics, alpha semantics, malformed input, and decompression-bomb warnings before producing an in-memory BGR array. High-bit-depth inputs are rejected by the current `uint8` contract.
 
 The learned methods additionally require an exact Python 3.12 environment, a verified local backbone weight, the exact environment-lock identity, and method-specific immutable artifacts. No component downloads a weight automatically.
 
@@ -47,7 +47,7 @@ All result masks use returned analysed-image coordinates. A box is:
 (x_min, y_min, x_max, y_max)
 ```
 
-and is half-open: `x_min ≤ x < x_max`, `y_min ≤ y < y_max`. `x_max` and `y_max` are one past the final included pixel. Every box is recomputed from its final mask. The professor renderer records original-to-analysed `x` and `y` scale factors and draws `(x_max - 1, y_max - 1)` as the visible final box pixel.
+and is half-open: `x_min ≤ x < x_max`, `y_min ≤ y < y_max`. `x_max` and `y_max` are one past the final included pixel. Every box is recomputed from its final mask. The demonstration renderer records original-to-analysed `x` and `y` scale factors and draws `(x_max - 1, y_max - 1)` as the visible final box pixel.
 
 ## 6. Frozen classical baseline
 
@@ -150,11 +150,11 @@ Classical execution allocates several image-sized feature maps and protected tem
 
 PatchCore feature extraction scales with resized input patches; exact nearest-neighbour scoring scales with query patches × memory-bank entries × embedding width, implemented in chunks. The recorded memory banks are 151×1,536 for the PatchCore baseline and 116×1,536 for the hybrid. Hybrid execution adds one classical and one PatchCore pass plus per-candidate feature extraction.
 
-The professor facade rejects images above 40 million decoded pixels and warns above 12 million pixels or a 4,096-pixel edge. Those are demonstration safeguards, not validated detector limits.
+The demonstration facade rejects images above 40 million decoded pixels and warns above 12 million pixels or a 4,096-pixel edge. Those are demonstration safeguards, not validated detector limits.
 
 ## 14. Known limitations
 
-- Synthetic development evidence only; no professor or real marine data.
+- Synthetic development evidence only; no private collaborator or real marine data.
 - No transfer, deployment, cross-platform, compression, or public-benchmark validation.
 - No physical scale, uncertainty calibration, class prediction, or engineering diagnosis.
 - Classical clean proposal burden is high.
@@ -165,11 +165,11 @@ The professor facade rejects images above 40 million decoded pixels and warns ab
 
 ## 15. Data requirements
 
-Future data require immutable sample IDs and content hashes, explicit colour/resolution/acquisition metadata, anomaly/annotation semantics, acquisition groups, reviewer/version identity, licence and confidentiality status, role assignment, and a split-lock hash. The detailed boundary is in [Professor Data Adapter](professor-data-adapter.md).
+Future data require immutable sample IDs and content hashes, explicit colour/resolution/acquisition metadata, anomaly/annotation semantics, acquisition groups, reviewer/version identity, licence and confidentiality status, role assignment, and a split-lock hash. The detailed boundary is in [Private Dataset Adapter](private-dataset-adapter.md).
 
 ## 16. Evaluation contract
 
-`structvision-eval-v2` requires immutable selected-image identities and order, content-verified image/truth hashes, exact executable configuration, fixed matching/metric policy, complete method pairing, explicit attempt identity, and sink-controlled append-only persistence. The professor demonstration never invokes an experiment executor or result sink.
+`structvision-eval-v2` requires immutable selected-image identities and order, content-verified image/truth hashes, exact executable configuration, fixed matching/metric policy, complete method pairing, explicit attempt identity, and sink-controlled append-only persistence. The technical demonstration never invokes an experiment executor or result sink.
 
 Current method comparison uses the stored 72-image synthetic development holdout only. It must not be reinterpreted as real-world, confirmatory, publication, or global-superiority evidence.
 

@@ -19,7 +19,7 @@ The selector reads registry metadata in SQLite read-only mode, excludes pilot/hi
 
 ## Appropriate use
 
-Normal fit may construct only the hybrid-specific clean memory. Fusion fit may define normalisation, coefficients, thresholds, and preservation checks. Holdout may be loaded once after freezing and may not tune this implementation. The data must not be relabelled as independent test, confirmatory, real-world, professor-provided, or transferable evidence.
+Normal fit may construct only the hybrid-specific clean memory. Fusion fit may define normalisation, coefficients, thresholds, and preservation checks. Holdout may be loaded once after freezing and may not tune this implementation. The data must not be relabelled as independent test, confirmatory, real-world, externally provided, or transferable evidence.
 
 ## Limitations
 

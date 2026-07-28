@@ -69,7 +69,7 @@ An explicitly injected `ArtifactSink` may receive an analysis result. `NullArtif
 
 ## Limitations
 
-The adapter intentionally preserves the protected v1 algorithm and its memory behavior. It does not provide parallel execution, physical scale, calibrated uncertainty, learned classification, real-world validation, or professor-data parsing. Large images can require several full-resolution feature maps and temporary visualisations. A future professor-data adapter must remain outside the detector core and supply explicit colour, image identity, provenance, and ground-truth semantics.
+The adapter intentionally preserves the protected v1 algorithm and its memory behavior. It does not provide parallel execution, physical scale, calibrated uncertainty, learned classification, real-world validation, or private-data parsing. Large images can require several full-resolution feature maps and temporary visualisations. A future private-data adapter must remain outside the detector core and supply explicit colour, image identity, provenance, and ground-truth semantics.
 
 ## Optional Normal-Feature API
 

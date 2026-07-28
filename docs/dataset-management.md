@@ -85,6 +85,6 @@ Only schemas and documentation are intended for version control.
 
 ## External And Restricted Data
 
-**Do not commit professor-provided, private, restricted, or unlicensed images to the public repository.**
+**Do not commit externally provided, private, restricted, or unlicensed images to the public repository.**
 
 Register restricted collections locally, preserve source and licence metadata, and use ignored runtime directories. Ground truth should be marked verified, reviewer-estimated, unavailable, or unknown as appropriate. Public redistribution requires permission independent of the repository's code status.

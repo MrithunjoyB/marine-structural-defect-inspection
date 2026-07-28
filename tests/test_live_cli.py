@@ -31,7 +31,7 @@ def write_image(path: Path) -> None:
     Image.fromarray(image).save(path)
 
 
-class ProfessorCliTests(unittest.TestCase):
+class LiveCliTests(unittest.TestCase):
     def run_cli(self, arguments: list[str], cwd: Path) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, "-m", "structvision.cli", *arguments],

@@ -5,7 +5,7 @@
 - Method: `structvision-patchcore-baseline-v1-dev` `1.0.0-dev1`
 - Upstream: official Anomalib `2.5.1` PatchCore
 - Intended use: development-only normal-feature anomaly baseline and failure analysis
-- Not intended for: defect classification, engineering diagnosis, professor-data evaluation, safety decisions, confirmatory comparison, probability estimation, or real-world deployment
+- Not intended for: defect classification, engineering diagnosis, private-data evaluation, safety decisions, confirmatory comparison, probability estimation, or real-world deployment
 
 ## Model and data
 

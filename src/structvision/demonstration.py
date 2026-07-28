@@ -1,4 +1,4 @@
-"""Write-free professor-demonstration facade around public detector APIs.
+"""Write-free technical-demonstration facade around public detector APIs.
 
 This module validates in-memory inputs, invokes one existing detector, and
 adapts typed results for faithful visualisation and explicit export. It does
@@ -710,7 +710,7 @@ def analyse_demonstration_image(
             image_id=decoded.image_id,
             colour_space="BGR",
             metadata={
-                "source": "professor_demonstration_in_memory",
+                "source": "technical_demonstration_in_memory",
                 "source_format": decoded.source_format,
                 "source_mode": decoded.source_mode,
                 "retained": False,
@@ -1038,7 +1038,7 @@ def export_payload(analysis: DemonstrationAnalysis) -> dict[str, object]:
     result = analysis.result
     image_score = getattr(result, "image_anomaly_score", None)
     return {
-        "schema_version": "structvision-professor-analysis-v1",
+        "schema_version": "structvision-demonstration-analysis-v1",
         "export_timestamp_utc": analysis.created_timestamp_utc,
         "method": analysis.method.to_dict(),
         "processing_status": "completed",

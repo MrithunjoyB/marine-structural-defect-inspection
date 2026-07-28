@@ -2,14 +2,14 @@
 set -eu
 
 usage() {
-  echo "Usage: scripts/run_professor_demo.sh --input IMAGE [--output-base DIR] [--venv DIR] [--open]" >&2
+  echo "Usage: scripts/run_live_demo.sh --input IMAGE [--output-base DIR] [--venv DIR] [--open]" >&2
   exit 2
 }
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 input_path=
-output_base="$repo_root/build/professor-demo-runs"
+output_base="$repo_root/build/live-demo-runs"
 venv_path=
 open_after=0
 
@@ -55,8 +55,8 @@ if [ -n "$venv_path" ]; then
   . "$venv_path/bin/activate"
 fi
 
-command -v structvision-professor-demo >/dev/null 2>&1 || {
-  echo "structvision-professor-demo is not installed in the selected environment." >&2
+command -v structvision-live-demo >/dev/null 2>&1 || {
+  echo "structvision-live-demo is not installed in the selected environment." >&2
   echo "Activate the prepared environment; this launcher never installs packages." >&2
   exit 4
 }
@@ -65,7 +65,7 @@ mkdir -p -- "$output_base"
 timestamp=$(date -u '+%Y%m%dT%H%M%SZ')
 output_dir="$output_base/demo-run-$timestamp"
 
-structvision-professor-demo \
+structvision-live-demo \
   --input "$input_path" \
   --output-dir "$output_dir"
 

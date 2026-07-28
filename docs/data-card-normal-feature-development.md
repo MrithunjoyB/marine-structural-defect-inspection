@@ -17,4 +17,4 @@ The selector excludes exact hashes, conservative perceptual candidates, and decl
 
 ## Appropriate use and limitations
 
-Appropriate use is normal-only memory construction, validation-only operating-point calibration, and non-confirmatory development analysis. It must not be used as an independent test, real-world validation, professor-data proxy, or transferability evidence. Generator-family dependence, conservative candidate exclusion, missing acquisition groups, and unresolved semantic near-duplicate risk limit interpretation.
+Appropriate use is normal-only memory construction, validation-only operating-point calibration, and non-confirmatory development analysis. It must not be used as an independent test, real-world validation, private-data proxy, or transferability evidence. Generator-family dependence, conservative candidate exclusion, missing acquisition groups, and unresolved semantic near-duplicate risk limit interpretation.

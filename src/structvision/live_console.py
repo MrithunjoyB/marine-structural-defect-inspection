@@ -1,4 +1,4 @@
-"""Offline professor-console orchestration over the public StructVision facade.
+"""Offline live-console orchestration over the public StructVision facade.
 
 This module contains presentation, filesystem, and integrity handling only. It
 does not implement image preprocessing, feature extraction, proposal
@@ -54,19 +54,19 @@ EXIT_UNSAFE_TARGET = 7
 SCORE_WARNING = (
     "Review proposals only — not confirmed defects or engineering diagnosis."
 )
-OWNERSHIP_MARKER_NAME = ".structvision-professor-console-owner.json"
-OWNERSHIP_SCHEMA = "structvision-professor-console-run-owner-v1"
-OWNERSHIP_TOOL = "structvision-professor-demo"
+OWNERSHIP_MARKER_NAME = ".structvision-live-console-owner.json"
+OWNERSHIP_SCHEMA = "structvision-live-console-run-owner-v1"
+OWNERSHIP_TOOL = "structvision-live-demo"
 OWNERSHIP_VERSION = 1
-RUN_MANIFEST_SCHEMA = "structvision-professor-run-manifest-v1"
+RUN_MANIFEST_SCHEMA = "structvision-live-run-manifest-v1"
 STANDARD_USER_FOLDERS = (
     "Documents",
     "Desktop",
     "Downloads",
     "Developer",
 )
-STAGING_NAME_TOKEN = ".structvision-professor-stage-"
-BACKUP_NAME_TOKEN = ".structvision-professor-backup-"
+STAGING_NAME_TOKEN = ".structvision-live-stage-"
+BACKUP_NAME_TOKEN = ".structvision-live-backup-"
 TIMING_FIELDS = (
     ("input_normalisation", "input_normalisation"),
     ("preprocessing", "preprocessing"),
@@ -92,10 +92,10 @@ class OwnedRunIdentity:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="structvision-professor-demo",
+        prog="structvision-live-demo",
         description=(
             "Run the stable frozen StructVision baseline once and create an "
-            "explicit, professor-facing INPUT/PROCESSING/OUTPUT record."
+            "explicit technical-review INPUT/PROCESSING/OUTPUT record."
         ),
     )
     parser.add_argument(
@@ -519,7 +519,7 @@ def _validate_owned_run(root: Path) -> OwnedRunIdentity:
         or manifest["method"].get("method_id") != CLASSICAL_METHOD
     ):
         raise UnsafeOutputTargetError(
-            "StructVision run manifest is not a completed professor-console run"
+            "StructVision run manifest is not a completed live-console run"
         )
 
     records = manifest.get("files")
@@ -598,7 +598,7 @@ def _console_lines(
     generated: Iterable[str] = (),
 ) -> list[str]:
     lines = [
-        "StructVision-AI — Professor Console Demonstration",
+        "StructVision-AI — Live Inspection Console",
         "--------------------------------------------------",
         f"Input       : {input_name}",
         f"Format      : {decoded.source_format} / {decoded.source_mode}",
@@ -685,7 +685,7 @@ def _prepare_target(
     if not overwrite:
         raise FileExistsError(
             "Output directory already exists; pass --overwrite only to replace "
-            "a marker-owned professor-console run"
+            "a marker-owned live-console run"
         )
     return target, _validate_owned_run(target)
 
@@ -823,7 +823,7 @@ def _write_run(
             },
         )
         input_metadata = {
-            "schema_version": "structvision-professor-input-v1",
+            "schema_version": "structvision-live-input-v1",
             "source_filename": input_name,
             "source_format": decoded.source_format,
             "source_mode": decoded.source_mode,
@@ -845,7 +845,7 @@ def _write_run(
         )
 
         stages = {
-            "schema_version": "structvision-professor-pipeline-v1",
+            "schema_version": "structvision-live-pipeline-v1",
             "method_identity": analysis.method_id,
             "method_status": analysis.method.status,
             "stages": list(pipeline_stages(CLASSICAL_METHOD)),

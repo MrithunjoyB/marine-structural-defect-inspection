@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "structvision"
 version = "1.0.0"
-description = "Write-free local API for the frozen StructVision classical anomaly-proposal baseline"
+description = "Modular, evidence-driven visual anomaly proposal and inspection research platform for marine and structural imagery"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{name = "Mrithunjoy Basumatary"}]
@@ -18,7 +18,7 @@ dependencies = [
 
 [project.scripts]
 structvision-analyse = "structvision.cli:main"
-structvision-professor-demo = "structvision.professor_console:main"
+structvision-live-demo = "structvision.live_console:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "build>=1.2"]

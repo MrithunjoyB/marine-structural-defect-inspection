@@ -55,7 +55,7 @@ All ten expected validation categories remain. Template and source groups are di
 
 Only `normal_fit` constructs the feature memory and coreset; no anomaly mask or validation score enters fitting. `calibration_validation` supplies clean false-proposal budgets and development diagnostics. Threshold selection follows a fixed descending-threshold path and uses only clean false-proposal burden, not anomaly-label optimization. All candidate points and poor operating points remain in the calibration artifact.
 
-No image in this protocol is described as independent, confirmatory, real-world, or professor-provided.
+No image in this protocol is described as independent, confirmatory, real-world, or externally provided.
 
 ## Proposal-guided hybrid protocol
 

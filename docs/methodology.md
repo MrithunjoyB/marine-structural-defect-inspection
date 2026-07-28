@@ -109,7 +109,7 @@ The effective likelihood is reduced by two structural safeguards. The crack safe
 
 The proposal method does not estimate structural capacity, defect severity, material loss, or repair priority. Reported priority is a visual review order. Domain claims require licensed real data, expert ground truth, calibrated acquisition, and an appropriate engineering validation protocol.
 
-The normal-feature adapter remains a separate protected path. A new proposal-guided hybrid is implemented under its own identity and protocol; it begins with byte-identical classical masks, adds candidate-level PatchCore evidence, and applies a frozen non-negative linear rank score. It does not alter either baseline. Its only completed evidence is a rejected synthetic development-holdout result, described in [Proposal-Guided Hybrid](proposal-guided-hybrid.md). No professor-data evaluation is implemented.
+The normal-feature adapter remains a separate protected path. A new proposal-guided hybrid is implemented under its own identity and protocol; it begins with byte-identical classical masks, adds candidate-level PatchCore evidence, and applies a frozen non-negative linear rank score. It does not alter either baseline. Its only completed evidence is a rejected synthetic development-holdout result, described in [Proposal-Guided Hybrid](proposal-guided-hybrid.md). No private-data evaluation is implemented.
 
 ## Frozen Reusable Execution Contract
 

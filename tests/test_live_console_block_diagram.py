@@ -10,9 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 
 
-class ProfessorBlockDiagramTests(unittest.TestCase):
+class LiveConsoleBlockDiagramTests(unittest.TestCase):
     def test_mermaid_has_two_valid_flowcharts_and_required_pipeline(self):
-        source = (DOCS / "professor-console-block-diagram.md").read_text(
+        source = (DOCS / "live-console-block-diagram.md").read_text(
             encoding="utf-8"
         )
         blocks = re.findall(r"```mermaid\n(.*?)```", source, re.DOTALL)
@@ -22,12 +22,12 @@ class ProfessorBlockDiagramTests(unittest.TestCase):
         )
         required = (
             "INPUT IMAGE",
-            "INPUT VALIDATION AND COLOUR HANDLING",
+            "VALIDATION AND NORMALISATION",
             "PREPROCESSING",
-            "FEATURE EXTRACTION",
-            "REGION PROPOSAL / BINARY MASK GENERATION",
+            "VISUAL EVIDENCE EXTRACTION",
+            "CANDIDATE REGION GENERATION / BINARY MASKS",
             "CONTEXTUAL SCORING AND RANKING",
-            "TYPED RESULT AND PROVENANCE",
+            "TYPED RESULTS AND PROVENANCE",
             "EXPLICIT OUTPUT FILES",
         )
         for label in required:
@@ -38,7 +38,7 @@ class ProfessorBlockDiagramTests(unittest.TestCase):
         )
 
     def test_module_names_exist_and_statuses_are_exact(self):
-        source = (DOCS / "professor-console-block-diagram.md").read_text(
+        source = (DOCS / "live-console-block-diagram.md").read_text(
             encoding="utf-8"
         )
         modules = (
@@ -50,7 +50,7 @@ class ProfessorBlockDiagramTests(unittest.TestCase):
             "src/structvision/classical.py",
             "src/structvision/types.py",
             "src/structvision/cli.py",
-            "src/structvision/professor_console.py",
+            "src/structvision/live_console.py",
         )
         for module in modules:
             self.assertIn(module, source)
@@ -60,7 +60,7 @@ class ProfessorBlockDiagramTests(unittest.TestCase):
         self.assertIn("rejected development candidate", source)
 
     def test_svg_is_self_contained_accessible_and_has_both_architectures(self):
-        path = DOCS / "professor-console-block-diagram.svg"
+        path = DOCS / "live-console-block-diagram.svg"
         root = ET.fromstring(path.read_bytes())
         self.assertTrue(root.tag.endswith("svg"))
         text = path.read_text(encoding="utf-8")
@@ -74,9 +74,9 @@ class ProfessorBlockDiagramTests(unittest.TestCase):
 
     def test_offline_html_has_no_remote_assets_and_guide_has_all_sections(self):
         diagram = (
-            DOCS / "professor-console-block-diagram.html"
+            DOCS / "live-console-block-diagram.html"
         ).read_text(encoding="utf-8")
-        guide = (DOCS / "professor-console-handoff.html").read_text(
+        guide = (DOCS / "technical-handoff.html").read_text(
             encoding="utf-8"
         )
         for payload in (diagram, guide):
@@ -84,7 +84,7 @@ class ProfessorBlockDiagramTests(unittest.TestCase):
             self.assertNotIn("<script", payload.lower())
             self.assertIn("<style>", payload)
         self.assertIn(
-            'src="professor-console-block-diagram.svg"',
+            'src="live-console-block-diagram.svg"',
             diagram,
         )
         sections = (
@@ -99,14 +99,14 @@ class ProfessorBlockDiagramTests(unittest.TestCase):
             "Demonstration script",
             "Current evidence and limitations",
             "Why the hybrid is rejected",
-            "Future professor-data integration",
+            "Future private-data integration",
             "Security and privacy",
             "Troubleshooting",
-            "Questions the professor may ask",
+            "Questions a technical reviewer may ask",
         )
         for heading in sections:
             self.assertIn(heading, guide)
-        self.assertIn("structvision-professor-demo", guide)
+        self.assertIn("structvision-live-demo", guide)
         self.assertIn("--verify", guide)
         self.assertIn("not confirmed defects", guide)
 

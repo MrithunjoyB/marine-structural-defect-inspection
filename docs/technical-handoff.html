@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StructVision-AI Offline Professor Console Handoff</title>
+  <title>StructVision-AI Technical Handoff</title>
   <style>
     :root { color-scheme:light; --navy:#173941; --teal:#216577; --muted:#52666c; --line:#ccd8da; --paper:#fff; --wash:#f2f6f6; --green:#276644; --amber:#80620f; --red:#963c32; }
     * { box-sizing:border-box; }
@@ -48,8 +48,8 @@
 <body>
   <header>
     <p class="eyebrow">Offline engineering/research handoff</p>
-    <h1>StructVision-AI Professor Console</h1>
-    <p>A local, inspectable demonstration of the frozen classical anomaly-proposal pipeline, its typed outputs, source-code boundaries, evidence status, and safe drive handoff.</p>
+    <h1>StructVision-AI Technical Handoff</h1>
+    <p>A portable technical release for inspecting the Live Inspection Console, frozen classical anomaly-proposal pipeline, typed outputs, source-code boundaries, evidence status, and safe drive handoff.</p>
   </header>
   <main>
     <nav aria-label="Guide sections">
@@ -68,19 +68,19 @@
       <a href="#future">12. Future data</a>
       <a href="#security">13. Security and privacy</a>
       <a href="#troubleshooting">14. Troubleshooting</a>
-      <a href="#questions">15. Professor questions</a>
+      <a href="#questions">15. Technical reviewer questions</a>
     </nav>
     <article>
       <section id="purpose">
         <h2>1. Project purpose</h2>
-        <p>StructVision-AI takes one local image and returns ranked visual-anomaly proposals for expert review. Each returned proposal has a binary mask, a mask-derived half-open bounding box, heuristic evidence, and provenance. The current system supports method inspection and research planning; it does not classify structural damage or decide engineering fitness.</p>
+        <p>StructVision-AI is a modular, evidence-driven visual anomaly proposal and inspection research platform for marine and structural imagery. It takes one local image and returns ranked visual-anomaly proposals for expert review. Each returned proposal has a binary mask, a mask-derived half-open bounding box, heuristic evidence, and provenance. The current system supports research and technical validation; it does not classify structural damage or decide engineering fitness.</p>
         <p class="notice warning"><strong>Required interpretation:</strong> Review proposals only — not confirmed defects or engineering diagnosis.</p>
       </section>
 
       <section id="status">
         <h2>2. Current method status</h2>
         <table>
-          <thead><tr><th>Method</th><th>Status</th><th>Professor demonstration role</th></tr></thead>
+          <thead><tr><th>Method</th><th>Status</th><th>Technical demonstration role</th></tr></thead>
           <tbody>
             <tr><td><code>structvision-classical-baseline-v1-frozen</code></td><td><span class="status stable">Stable frozen baseline</span></td><td>Live default. Runs in the base environment without weights.</td></tr>
             <tr><td>PatchCore</td><td><span class="status development">Protected development baseline</span></td><td>Optional research comparison in an exact learned environment; not needed live.</td></tr>
@@ -91,7 +91,7 @@
 
       <section id="diagram">
         <h2>3. Block diagram</h2>
-        <img class="diagram" src="professor-console-block-diagram.svg" alt="Input to validation, preprocessing, feature extraction, proposal generation, scoring, typed result and explicit outputs, plus client and method-status architecture">
+        <img class="diagram" src="live-console-block-diagram.svg" alt="Input to validation, preprocessing, feature extraction, proposal generation, scoring, typed result and explicit outputs, plus client and method-status architecture">
         <p>The console and Streamlit clients call the public StructVision facade. The frozen adapter invokes the byte-protected classical modules and returns typed in-memory results. Files are written only by an explicit output path.</p>
       </section>
 
@@ -110,27 +110,27 @@
         <h3>Prepared Mac: direct live command</h3>
         <pre><code>cd "/path/to/marine-structural-defect-inspection"
 source venv/bin/activate
-structvision-professor-demo \
+structvision-live-demo \
   --input "/path/to/demonstration-fixture.png" \
   --output-dir "/path/to/demo-run"</code></pre>
-        <p>For an alpha-bearing image, add <code>--alpha-handling composite_white</code>. Existing directories are protected. <code>--overwrite</code> can replace only the exact target of a previous completed professor-console run whose ownership marker, manifest, payload hashes, and directory contents still validate. The new run is completed in private sibling staging before installation, so analysis or serialization failure preserves the prior run. Unmarked, changed, dangerous, or symlinked targets are refused.</p>
+        <p>For an alpha-bearing image, add <code>--alpha-handling composite_white</code>. Existing directories are protected. <code>--overwrite</code> can replace only the exact target of a previous completed live-console run whose <code>.structvision-live-console-owner.json</code> marker, manifest, payload hashes, and directory contents still validate. The new run is completed in private sibling staging before installation, so analysis or serialization failure preserves the prior run. Unmarked, changed, dangerous, or symlinked targets are refused. Outputs carrying the retired pre-migration marker are deliberately refused and must be retained or removed manually.</p>
         <h3>Prepared Mac: one-command launcher</h3>
-        <pre><code>scripts/run_professor_demo.sh \
+        <pre><code>scripts/run_live_demo.sh \
   --venv "/path/to/marine-structural-defect-inspection/venv" \
   --input "/path/to/demonstration-fixture.png" \
   --output-base "/path/to/presentation-runs" \
   --open</code></pre>
         <h3>Build and verify the drive bundle</h3>
-        <pre><code>python scripts/build_professor_handoff.py \
-  --output "/path/to/StructVision-AI-Professor-Handoff"
+        <pre><code>python scripts/build_technical_handoff.py \
+  --output "/path/to/StructVision-AI-Technical-Handoff"
 
-python scripts/build_professor_handoff.py \
-  --verify "/path/to/StructVision-AI-Professor-Handoff"</code></pre>
+python scripts/build_technical_handoff.py \
+  --verify "/path/to/StructVision-AI-Technical-Handoff"</code></pre>
       </section>
 
       <section id="folders">
         <h2>6. Run folder structure</h2>
-        <div class="tree" role="img" aria-label="Professor run directory tree">demo-run/
+        <div class="tree" role="img" aria-label="Live run directory tree">demo-run/
 ├── INPUT/
 │   ├── original.png
 │   └── input-metadata.json
@@ -146,6 +146,7 @@ python scripts/build_professor_handoff.py \
 │   ├── technical-summary.txt
 │   └── masks/R001.png …
 ├── RUN_MANIFEST.json
+├── .structvision-live-console-owner.json
 └── CONSOLE_LOG.txt</div>
       </section>
 
@@ -164,6 +165,7 @@ python scripts/build_professor_handoff.py \
             <tr><td><code>result.json</code></td><td>Structured analysis, method/configuration identities, coordinate mapping, candidates, privacy flags, and limitations.</td></tr>
             <tr><td><code>masks/*.png</code></td><td>Exact 0/255 binary masks in analysed-image coordinates.</td></tr>
             <tr><td><code>RUN_MANIFEST.json</code></td><td>Execution count, platform, identities, warnings, relative file inventory, sizes, and SHA-256 values.</td></tr>
+            <tr><td><code>.structvision-live-console-owner.json</code></td><td>Fixed live-console ownership identity linked to the completed manifest. It is required before an exact run directory can be replaced.</td></tr>
           </tbody>
         </table>
         <p>Classical scores are heuristics, not probabilities or calibrated confidence. Boxes use <code>(x_min, y_min, x_max, y_max)</code> with exclusive maximum coordinates.</p>
@@ -182,7 +184,7 @@ python scripts/build_professor_handoff.py \
             <tr><td>Frozen compatibility adapter</td><td><code>src/structvision/classical.py</code></td></tr>
             <tr><td>Typed results</td><td><code>src/structvision/types.py</code></td></tr>
             <tr><td>Existing general CLI</td><td><code>src/structvision/cli.py</code></td></tr>
-            <tr><td>Professor console</td><td><code>src/structvision/professor_console.py</code></td></tr>
+            <tr><td>Live Inspection Console</td><td><code>src/structvision/live_console.py</code></td></tr>
           </tbody>
         </table>
       </section>
@@ -192,7 +194,7 @@ python scripts/build_professor_handoff.py \
         <ol>
           <li>State that the screen will show review proposals, not diagnosis.</li>
           <li>Show the fixture label: synthetic, excluded from research cohorts, and not real inspection evidence.</li>
-          <li>Run <code>structvision-professor-demo</code> and point out format, dimensions, colour path, exact method identity, and stable status.</li>
+          <li>Run <code>structvision-live-demo</code> and point out format, dimensions, colour path, exact method identity, and stable status.</li>
           <li>Explain the measured stage timings after the single completed analysis.</li>
           <li>Open <code>overlay.png</code>, then <code>proposals.csv</code>, <code>result.json</code>, and one mask.</li>
           <li>Show the block diagram and map the stages to source files.</li>
@@ -213,7 +215,7 @@ python scripts/build_professor_handoff.py \
       </section>
 
       <section id="future">
-        <h2>12. Future professor-data integration</h2>
+        <h2>12. Future private-data integration</h2>
         <ol>
           <li>Agree written data authority, confidentiality, licence, retention, and deletion controls.</li>
           <li>Define image formats, acquisition groups, normal/anomaly semantics, and annotation authority.</li>
@@ -222,7 +224,7 @@ python scripts/build_professor_handoff.py \
           <li>Predeclare a small prospective pilot and its acceptance/failure rules.</li>
           <li>Run through an explicit private result sink and review jointly without post-hoc holdout retuning.</li>
         </ol>
-        <p>No professor data has been accessed or included in this handoff.</p>
+        <p>No private collaborator data has been accessed or included in this handoff.</p>
       </section>
 
       <section id="security">
@@ -232,7 +234,7 @@ python scripts/build_professor_handoff.py \
           <li>The console never installs packages, downloads weights, or writes to a research database.</li>
           <li>Run manifests store relative file names, not absolute source paths or private environment variables.</li>
           <li>The drive source ZIP comes from committed Git content using <code>git archive HEAD</code>, not from the multi-gigabyte working directory.</li>
-          <li>Virtual environments, caches, databases, model weights, learned memories, private images, professor data, and historical result stores are prohibited from the bundle.</li>
+          <li>Virtual environments, caches, databases, model weights, learned memories, private images, private collaborator data, and historical result stores are prohibited from the bundle.</li>
         </ul>
         <h3>After the meeting</h3>
         <p>Retain the immutable drive bundle only under the agreed project retention policy. Delete temporary presentation runs containing any caller-authorised non-fixture image when they are no longer needed, including local copies and trash, and record the deletion if project governance requires it. Do not delete reviewed scientific stores or source history as part of presentation cleanup.</p>
@@ -245,7 +247,7 @@ python scripts/build_professor_handoff.py \
           <tbody>
             <tr><td>Command not found</td><td>Activate the prepared project environment. The launcher does not install anything.</td></tr>
             <tr><td>Alpha policy required</td><td>Choose and record <code>drop</code>, <code>composite_black</code>, or <code>composite_white</code>.</td></tr>
-            <tr><td>Existing output directory</td><td>Prefer a new timestamped directory. <code>--overwrite</code> works only for an intact, marker-owned output from a previous completed professor-console run; it refuses ordinary, changed, dangerous, or symlinked directories.</td></tr>
+            <tr><td>Existing output directory</td><td>Prefer a new timestamped directory. <code>--overwrite</code> works only for an intact, marker-owned output from a previous completed live-console run; it refuses ordinary, changed, dangerous, or symlinked directories.</td></tr>
             <tr><td>Malformed, oversized, or high-bit-depth input</td><td>Use a supported valid uint8 PNG/JPEG/TIFF; do not bypass validation during the meeting.</td></tr>
             <tr><td>No proposals returned</td><td>This is a valid detector result, not an execution failure.</td></tr>
             <tr><td>Missing intermediate image</td><td>Read <code>pipeline-stages.json</code>. Unexposed stages are intentionally not fabricated.</td></tr>
@@ -256,7 +258,7 @@ python scripts/build_professor_handoff.py \
       </section>
 
       <section id="questions">
-        <h2>15. Questions the professor may ask</h2>
+        <h2>15. Questions a technical reviewer may ask</h2>
         <details open><summary>Is each proposal a defect?</summary><p>No. It is a visual anomaly candidate for expert review.</p></details>
         <details><summary>Are the scores probabilities or confidence?</summary><p>No. Classical values are heuristics, PatchCore values are nearest-normal distances, and hybrid values are fixed linear rank scores.</p></details>
         <details><summary>Why is classical the live default?</summary><p>It is the stable, frozen, transparent base method, runs locally without learned artifacts, and retains the strongest current sensitivity evidence. That is not a global-superiority claim.</p></details>
@@ -265,11 +267,11 @@ python scripts/build_professor_handoff.py \
         <details><summary>Where are every internal-stage image and threshold map?</summary><p>Only artifacts already exposed by the frozen public facade are exported. Unavailable internals are labelled rather than invented or added by changing the detector.</p></details>
         <details><summary>Can I review the source from the drive?</summary><p>Yes. The source ZIP is made from the exact recorded Git commit, and the source manifest and checksums verify it.</p></details>
         <details><summary>Can I run this on another machine immediately?</summary><p>Only if compatible Python and platform dependencies are installed. The bundle deliberately contains no virtual environment or unverified platform wheelhouse.</p></details>
-        <details><summary>Can it use professor-provided data?</summary><p>Potentially, after written authority, private intake controls, agreed semantics, group-aware split locking, and a predeclared prospective pilot. No professor data is in this package.</p></details>
+        <details><summary>Can it use externally provided data?</summary><p>Potentially, after written authority, private intake controls, agreed semantics, group-aware split locking, and a predeclared prospective pilot. No private collaborator data is in this package.</p></details>
         <details><summary>Does it require internet or an API key?</summary><p>No for the installed base analysis. Initial dependency installation on another machine is a separate platform task.</p></details>
       </section>
     </article>
   </main>
-  <footer>StructVision-AI · Offline professor console handoff · Review proposals only</footer>
+  <footer>StructVision-AI · Technical Handoff Package · Review proposals only</footer>
 </body>
 </html>

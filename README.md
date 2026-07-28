@@ -1,22 +1,29 @@
 # StructVision-AI
 
-**Algorithm-First Visual Anomaly Proposal, Technical Review, and Reproducible Evaluation for Structural Surface Inspection**
+**A modular, evidence-driven visual anomaly proposal and inspection research
+platform for marine and structural imagery.**
 
-StructVision-AI is a research-oriented computer-vision framework for generating, ranking, reviewing, and evaluating visual anomaly proposals when task-specific labelled data are limited or unavailable. It integrates classical and contextual feature analysis, multi-scale proposal generation, segmentation-ready masks, human-in-the-loop annotation, registered dataset intake, leakage-safe splitting, reproducible batch experimentation, baseline comparison, category-wise analysis, bootstrap confidence intervals, configurable ablation studies, and optional downstream YOLO integration. The current system is an anomaly-proposal and dataset-construction environment; it is not a finished defect classifier or an engineering diagnostic system.
+StructVision-AI is an independent research and technical-validation platform for
+generating, ranking, reviewing, and evaluating visual anomaly proposals when
+task-specific labelled data are limited or unavailable. The current system is
+an anomaly-proposal and dataset-construction environment; it is not a finished
+defect classifier, engineering diagnostic system, or deployment-ready product.
+Real-domain validation remains pending representative, licensed, expert-reviewed
+data.
 
-## Professor-Ready Algorithm Demonstration
+## Live Inspection Console
 
-The stable operational demonstration method is `structvision-classical-baseline-v1-frozen`. It runs locally in the base environment, requires no downloaded model, paid API, or API key, and remains the default because it preserves the strongest current sensitivity evidence. PatchCore is an optional protected development baseline. The proposal-guided hybrid is an optional **rejected development candidate**; its lower nuisance burden and higher precision/localisation did not satisfy the predeclared overall and image-level sensitivity-preservation rules.
+The stable frozen classical baseline is `structvision-classical-baseline-v1-frozen`. It runs locally in the base environment, requires no downloaded model, paid API, or API key, and remains the operational demonstration method because it preserves the strongest current sensitivity evidence. PatchCore is an optional protected development baseline. The proposal-guided hybrid is an optional **rejected development candidate**; its lower nuisance burden and higher precision/localisation did not satisfy the predeclared overall and image-level sensitivity-preservation rules.
 
 After base installation, the CLI is available. Install the optional local demo dependency for Streamlit:
 
 ```bash
 structvision-analyse --input inspection.png --method classical
-structvision-professor-demo \
+structvision-live-demo \
   --input inspection.png \
-  --output-dir build/professor-demo-runs/demo-run
+  --output-dir build/live-demo-runs/demo-run
 python -m pip install '.[demo]'
-python -m streamlit run apps/professor_demo.py
+python -m streamlit run apps/structvision_demo.py
 ```
 
 The presentation-oriented console command creates an explicit
@@ -27,15 +34,21 @@ weights. The general CLI and Streamlit client retain their existing behaviour.
 Current evidence is synthetic and development-only; real-data validation remains
 future work.
 
-Technical review: [Offline Professor Console Guide](docs/professor-console-handoff.html), [Professor Block Diagram](docs/professor-console-block-diagram.html), [Algorithm Specification](docs/algorithm-specification.md), [Pseudocode](docs/algorithm-pseudocode.md), [Code Guide](docs/code-structure-guide.md), [Professor Handoff](docs/professor-handoff.md), [Demonstration Runbook](docs/professor-demo-runbook.md), and [Research Evidence Summary](docs/research-evidence-summary.md).
+Technical review: [Technical Handoff Guide](docs/technical-handoff.html),
+[Live Console Block Diagram](docs/live-console-block-diagram.html),
+[Algorithm Specification](docs/algorithm-specification.md),
+[Pseudocode](docs/algorithm-pseudocode.md), [Code Guide](docs/code-structure-guide.md),
+[Technical Handoff](docs/technical-handoff.md),
+[Live Demonstration Runbook](docs/live-demo-runbook.md), and
+[Research Evidence Summary](docs/research-evidence-summary.md).
 
 Build a small verified drive handoff outside the repository:
 
 ```bash
-python scripts/build_professor_handoff.py \
-  --output "/path/to/StructVision-AI-Professor-Handoff"
-python scripts/build_professor_handoff.py \
-  --verify "/path/to/StructVision-AI-Professor-Handoff"
+python scripts/build_technical_handoff.py \
+  --output "/path/to/StructVision-AI-Technical-Handoff"
+python scripts/build_technical_handoff.py \
+  --verify "/path/to/StructVision-AI-Technical-Handoff"
 ```
 
 The source ZIP is made with `git archive HEAD`; the working directory, virtual
@@ -176,15 +189,15 @@ The repository does not currently include a complete, publication-ready interfac
 ```text
 .
 ├── app.py, preprocess.py, feature_extraction.py      # application and image processing
-├── apps/professor_demo.py                             # isolated thin algorithm demonstration client
+├── apps/structvision_demo.py                          # isolated technical demonstration client
 ├── region_proposal.py, scoring.py                    # proposal and ranking pipeline
 ├── dataset_intake.py, research_dataset.py            # dataset registration and splitting
 ├── registered_experiment.py, experiment_tracking.py  # execution and persistence
 ├── scientific_contract/                               # prospective v2 evaluation/provenance
 ├── src/structvision/                                  # reusable APIs, demo facade, protected adapter, v2 executors
-│   ├── professor_console.py                           # explicit offline professor console run
+│   ├── live_console.py                                # explicit offline live-console run
 │   └── normal_feature/                                 # optional official PatchCore adapter/artifacts
-├── scripts/                                            # professor launcher and verified handoff builder
+├── scripts/                                           # live launcher and verified technical handoff builder
 ├── development_data/                                  # protected canonical development manifest
 ├── requirements/                                      # platform-specific learned-environment lock
 ├── research_evaluation.py, research_analysis*.py     # evaluation and scientific analysis
@@ -247,11 +260,11 @@ The normal-feature reference run is distinct and uses only the committed protect
 
 The separate proposal-guided hybrid work package is complete. It uses [protocol `structvision-hybrid-development-v1`](docs/development-data-protocol.md), a new implementation identity, a hybrid-specific normal memory, fusion-fit-only selection, and exactly one non-confirmatory development holdout attempt. The candidate substantially reduced clean proposal burden but failed the fixed overall and image-level sensitivity preservation criteria, so it is retained as a **rejected development candidate** and was not retuned. See [Hybrid Method](docs/proposal-guided-hybrid.md), [Development Results](docs/results/proposal-guided-hybrid-development.md), [Model Card](docs/model-card-proposal-guided-hybrid.md), and [Data Card](docs/data-card-hybrid-development.md).
 
-## Using External or Professor-Provided Data
+## Using External or Private Collaboration Data
 
-**Do not commit professor-provided, private, restricted, or unlicensed images to the public repository.**
+**Do not commit externally provided, private, restricted, or unlicensed images to the public repository.**
 
-Connect future private data through a separately authorised adapter, preserve source and licence metadata, and leave redistribution disabled unless permission is explicit. Private paths and metadata must remain outside Git. Raw files, annotations, reports, and registries belong in ignored runtime directories. Final quantitative evaluation requires a predeclared prospective protocol and verified or reviewer-estimated ground truth with clearly recorded provenance. See [Professor Data Adapter](docs/professor-data-adapter.md) and [Dataset Management](docs/dataset-management.md).
+Connect future private data through a separately authorised adapter, preserve source and licence metadata, and leave redistribution disabled unless permission is explicit. Private paths and metadata must remain outside Git. Raw files, annotations, reports, and registries belong in ignored runtime directories. Final quantitative evaluation requires a predeclared prospective protocol and verified or reviewer-estimated ground truth with clearly recorded provenance. See [Private Dataset Adapter](docs/private-dataset-adapter.md) and [Dataset Management](docs/dataset-management.md).
 
 ## Limitations
 
@@ -280,7 +293,7 @@ Connect future private data through a separately authorised adapter, preserve so
 
 ### Real-World Validation
 
-- ingest professor-provided or licensed public datasets;
+- ingest externally provided or licensed public datasets;
 - establish expert-reviewed ground truth;
 - perform cross-domain and category-wise evaluation; and
 - study synthetic-to-real generalisation.

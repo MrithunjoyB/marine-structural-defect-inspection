@@ -68,4 +68,4 @@ Do not rerun the completed holdout to improve this candidate. A new scientific q
 
 ## Limitations
 
-The data are deterministic synthetic generator output, the validation cohort was previously inspected in PatchCore work, and the holdout is not independent or confirmatory. The hybrid retains the classical proposal ceiling, depends on normal-memory representativeness and PatchCore spatial resolution, is not uncertainty calibrated, and has no real-world, professor-data, deployment, transferability, novelty, or global-superiority evidence.
+The data are deterministic synthetic generator output, the validation cohort was previously inspected in PatchCore work, and the holdout is not independent or confirmatory. The hybrid retains the classical proposal ceiling, depends on normal-memory representativeness and PatchCore spatial resolution, is not uncertainty calibrated, and has no real-world, private-data, deployment, transferability, novelty, or global-superiority evidence.

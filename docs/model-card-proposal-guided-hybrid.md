@@ -11,7 +11,7 @@ This is not a deployed model, calibrated probability system, diagnostic classifi
 
 ## Intended use
 
-The implementation is an explainable research candidate for ordering and filtering the complete frozen classical proposal list. It may be used to replay this development experiment and inspect component-level evidence. It must not be used for operational marine inspection, repair decisions, autonomous rejection, professor-data inference, or real-world performance claims.
+The implementation is an explainable research candidate for ordering and filtering the complete frozen classical proposal list. It may be used to replay this development experiment and inspect component-level evidence. It must not be used for operational marine inspection, repair decisions, autonomous rejection, private-data inference, or real-world performance claims.
 
 ## Components
 

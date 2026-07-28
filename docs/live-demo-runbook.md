@@ -1,4 +1,4 @@
-# Professor Demonstration Runbook
+# Live Demonstration Runbook
 
 Target duration: 10–15 minutes. Use the base environment and the frozen classical method. Learned execution is optional.
 
@@ -10,13 +10,13 @@ git rev-parse HEAD
 git status --short
 source venv/bin/activate
 structvision-analyse --help
-structvision-professor-demo --help
-python scripts/build_professor_handoff.py \
-  --verify "/path/to/StructVision-AI-Professor-Handoff"
+structvision-live-demo --help
+python scripts/build_technical_handoff.py \
+  --verify "/path/to/StructVision-AI-Technical-Handoff"
 ```
 
 Expected: branch/commit are the intended reviewed state; worktree is clean; the
-general CLI remains compatible; the professor command requires an explicit
+general CLI remains compatible; the live command requires an explicit
 output directory; and drive verification passes. Install dependencies before
 the meeting—never during the demonstration.
 
@@ -61,7 +61,7 @@ Explain that no database, output directory, API key, or remote service is requir
 Terminal:
 
 ```bash
-structvision-professor-demo \
+structvision-live-demo \
   --input "/path/to/demonstration-fixture.png" \
   --output-dir "/path/to/presentation-runs/demo-run"
 ```
@@ -74,9 +74,11 @@ selected composite/drop policy.
 
 Prefer a new timestamped output directory for every presentation. If
 `--overwrite` is used, it can replace only the exact intact output of a previous
-completed professor-console run. The ownership marker, manifest, payload hashes,
+completed live-console run. The ownership marker, manifest, payload hashes,
 and directory contents are revalidated before the swap; the new run is
 completed in private sibling staging so failure preserves the prior valid run.
+Runs carrying the retired pre-migration marker are intentionally refused and
+remain untouched; do not manually rewrite their marker or manifest.
 
 ## 5. Inspect masks and ranked evidence — 2 minutes
 
@@ -103,7 +105,7 @@ invented.”
 The Streamlit client remains an optional visual follow-up:
 
 ```bash
-python -m streamlit run apps/professor_demo.py
+python -m streamlit run apps/structvision_demo.py
 ```
 
 ## 6. Explain PatchCore — 1 minute
@@ -139,9 +141,9 @@ Open `docs/scientific-contract-v2.md` or `scientific_contract/specification.py`.
 
 Explain immutable selection, content hashes, fixed configuration/evaluation policy, complete method pairing, and explicit append-only sinks. State that the demonstration never invokes the experiment executor.
 
-## 9. Show the professor-data boundary — 1 minute
+## 9. Show the private-data boundary — 1 minute
 
-Screen: **Data Integration Contract** and [Professor Data Adapter](professor-data-adapter.md).
+Screen: **Data Integration Contract** and [Private Dataset Adapter](private-dataset-adapter.md).
 
 Explain that a private adapter supplies content-verified images, annotation semantics, acquisition groups, confidentiality/licence fields, and split-lock identity without changing detector code or putting private paths in Git.
 
@@ -210,7 +212,7 @@ No. The failed result was retained and the holdout was not rerun for modificatio
 
 **Can it use my data?**
 
-Yes through a future private adapter and predeclared protocol; no professor data has been accessed yet.
+Yes through a future private adapter and predeclared protocol; no private collaborator data has been accessed yet.
 
 **Does it require cloud or an API key?**
 

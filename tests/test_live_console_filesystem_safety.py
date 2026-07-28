@@ -12,7 +12,7 @@ from unittest.mock import patch
 from PIL import Image, PngImagePlugin
 
 from structvision import CLASSICAL_METHOD, demonstration_fixture
-from structvision import professor_console
+from structvision import live_console
 
 
 def fixture_bytes() -> bytes:
@@ -53,14 +53,14 @@ def tree_snapshot(root: Path) -> tuple[tuple[str, ...], dict[str, bytes]]:
 def plausible_marker(**changes: object) -> dict[str, object]:
     manifest_digest = "0" * 64
     marker: dict[str, object] = {
-        "schema_version": professor_console.OWNERSHIP_SCHEMA,
-        "tool_identity": professor_console.OWNERSHIP_TOOL,
-        "tool_version": professor_console.OWNERSHIP_VERSION,
+        "schema_version": live_console.OWNERSHIP_SCHEMA,
+        "tool_identity": live_console.OWNERSHIP_TOOL,
+        "tool_version": live_console.OWNERSHIP_VERSION,
         "method_identity": CLASSICAL_METHOD,
         "run_manifest_path": "RUN_MANIFEST.json",
-        "run_manifest_schema": professor_console.RUN_MANIFEST_SCHEMA,
+        "run_manifest_schema": live_console.RUN_MANIFEST_SCHEMA,
         "run_manifest_sha256": manifest_digest,
-        "ownership_digest": professor_console._ownership_digest(
+        "ownership_digest": live_console._ownership_digest(
             manifest_digest
         ),
         "completed": True,
@@ -69,7 +69,7 @@ def plausible_marker(**changes: object) -> dict[str, object]:
     return marker
 
 
-class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
+class LiveConsoleFilesystemSafetyTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(
             dir=Path(tempfile.gettempdir()).resolve()
@@ -86,7 +86,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
         stdout = StringIO()
         stderr = StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            status = professor_console.main(
+            status = live_console.main(
                 [
                     "--input",
                     str(self.input),
@@ -107,10 +107,10 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
         sentinel = target / "must-survive.txt"
         sentinel.write_text("preserve", encoding="utf-8")
         with self.assertRaisesRegex(
-            professor_console.UnsafeOutputTargetError,
+            live_console.UnsafeOutputTargetError,
             expected_message,
         ):
-            professor_console._safe_output_target(
+            live_console._safe_output_target(
                 target,
                 input_path=self.input,
             )
@@ -119,7 +119,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
     def test_home_and_standard_user_folders_are_refused_without_loss(self):
         fake_home = self.root / "fake-home"
         with patch.object(
-            professor_console,
+            live_console,
             "_home_directory",
             return_value=fake_home,
         ):
@@ -127,7 +127,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
                 fake_home,
                 expected_message="home directory",
             )
-            for name in professor_console.STANDARD_USER_FOLDERS:
+            for name in live_console.STANDARD_USER_FOLDERS:
                 with self.subTest(folder=name):
                     self.assert_path_refused_without_loss(
                         fake_home / name,
@@ -143,15 +143,15 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
             encoding="utf-8",
         )
         with patch.object(
-            professor_console,
+            live_console,
             "_is_filesystem_root",
             side_effect=lambda path: path == fake_root,
         ):
             with self.assertRaisesRegex(
-                professor_console.UnsafeOutputTargetError,
+                live_console.UnsafeOutputTargetError,
                 "Filesystem roots",
             ):
-                professor_console._safe_output_target(
+                live_console._safe_output_target(
                     fake_root,
                     input_path=self.input,
                 )
@@ -161,7 +161,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
         )
 
         with patch.object(
-            professor_console,
+            live_console,
             "_is_mount_root",
             side_effect=lambda path: path == fake_volume_root,
         ):
@@ -175,7 +175,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
         repository = repository_parent / "repository"
         repository.mkdir(parents=True)
         with patch.object(
-            professor_console,
+            live_console,
             "_repository_roots",
             return_value=(repository,),
         ):
@@ -192,10 +192,10 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
         sentinel = self.input.parent / "must-survive.txt"
         sentinel.write_text("preserve", encoding="utf-8")
         with self.assertRaisesRegex(
-            professor_console.UnsafeOutputTargetError,
+            live_console.UnsafeOutputTargetError,
             "input parent",
         ):
-            professor_console._safe_output_target(
+            live_console._safe_output_target(
                 self.input.parent,
                 input_path=self.input,
             )
@@ -223,10 +223,10 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
         for target in (direct_link, ancestor_link / "nested-output"):
             with self.subTest(target=target.name):
                 with self.assertRaisesRegex(
-                    professor_console.UnsafeOutputTargetError,
+                    live_console.UnsafeOutputTargetError,
                     "symlink",
                 ):
-                    professor_console._safe_output_target(
+                    live_console._safe_output_target(
                         target,
                         input_path=self.input,
                     )
@@ -242,21 +242,57 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
         sentinel = output / "must-survive.txt"
         sentinel.write_text("preserve", encoding="utf-8")
         with patch.object(
-            professor_console,
+            live_console,
             "analyse_demonstration_image",
         ) as detector, patch.object(
-            professor_console.shutil,
+            live_console.shutil,
             "rmtree",
         ) as remove_tree:
             status, _stdout, stderr = self.run_console(
                 output,
                 "--overwrite",
             )
-        self.assertEqual(status, professor_console.EXIT_UNSAFE_TARGET)
+        self.assertEqual(status, live_console.EXIT_UNSAFE_TARGET)
         self.assertIn("Unsafe output target", stderr)
         detector.assert_not_called()
         remove_tree.assert_not_called()
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+
+    def test_retired_marker_run_is_preserved_and_refused(self):
+        output = self.root / "retired-marker-run"
+        output.mkdir()
+        sentinel = output / "must-survive.txt"
+        sentinel.write_text("preserve", encoding="utf-8")
+        retired_marker = output / ".structvision-professor-console-owner.json"
+        retired_marker.write_text(
+            json.dumps(
+                {
+                    "schema_version": (
+                        "structvision-professor-console-run-owner-v1"
+                    ),
+                    "tool_identity": "structvision-professor-demo",
+                    "completed": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.object(
+            live_console,
+            "analyse_demonstration_image",
+        ) as detector, patch.object(
+            live_console.shutil,
+            "rmtree",
+        ) as remove_tree:
+            status, _stdout, stderr = self.run_console(
+                output,
+                "--overwrite",
+            )
+        self.assertEqual(status, live_console.EXIT_UNSAFE_TARGET)
+        self.assertIn("Unsafe output target", stderr)
+        detector.assert_not_called()
+        remove_tree.assert_not_called()
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+        self.assertTrue(retired_marker.is_file())
 
     def test_forged_malformed_and_wrong_tool_markers_are_refused(self):
         cases = {
@@ -277,11 +313,11 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
                 output.mkdir()
                 sentinel = output / "must-survive.txt"
                 sentinel.write_text(name, encoding="utf-8")
-                (output / professor_console.OWNERSHIP_MARKER_NAME).write_bytes(
+                (output / live_console.OWNERSHIP_MARKER_NAME).write_bytes(
                     marker_payload
                 )
                 with patch.object(
-                    professor_console,
+                    live_console,
                     "analyse_demonstration_image",
                 ) as detector:
                     status, _stdout, stderr = self.run_console(
@@ -290,7 +326,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
                     )
                 self.assertEqual(
                     status,
-                    professor_console.EXIT_UNSAFE_TARGET,
+                    live_console.EXIT_UNSAFE_TARGET,
                 )
                 self.assertIn("Unsafe output target", stderr)
                 detector.assert_not_called()
@@ -299,16 +335,16 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
     def test_valid_owned_run_replaces_only_after_staging_is_complete(self):
         output = self.root / "owned-run"
         first, _stdout, first_stderr = self.run_console(output)
-        self.assertEqual(first, professor_console.EXIT_SUCCESS, first_stderr)
+        self.assertEqual(first, live_console.EXIT_SUCCESS, first_stderr)
         prior = tree_snapshot(output)
-        original_write = professor_console._write_run
+        original_write = live_console._write_run
 
         def observe_prior_while_staging(**kwargs):
             self.assertEqual(tree_snapshot(output), prior)
             return original_write(**kwargs)
 
         with patch.object(
-            professor_console,
+            live_console,
             "_write_run",
             side_effect=observe_prior_while_staging,
         ):
@@ -316,12 +352,12 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
                 output,
                 "--overwrite",
             )
-        self.assertEqual(second, professor_console.EXIT_SUCCESS, second_stderr)
-        professor_console._validate_owned_run(output)
+        self.assertEqual(second, live_console.EXIT_SUCCESS, second_stderr)
+        live_console._validate_owned_run(output)
         self.assertFalse(
             any(
-                professor_console.STAGING_NAME_TOKEN in path.name
-                or professor_console.BACKUP_NAME_TOKEN in path.name
+                live_console.STAGING_NAME_TOKEN in path.name
+                or live_console.BACKUP_NAME_TOKEN in path.name
                 for path in output.parent.iterdir()
             )
         )
@@ -329,21 +365,21 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
     def test_install_failure_restores_previous_complete_run(self):
         output = self.root / "rollback-run"
         first, _stdout, first_stderr = self.run_console(output)
-        self.assertEqual(first, professor_console.EXIT_SUCCESS, first_stderr)
+        self.assertEqual(first, live_console.EXIT_SUCCESS, first_stderr)
         prior = tree_snapshot(output)
         real_rename = os.rename
 
         def fail_staging_install(source, destination, *args, **kwargs):
             source_path = Path(source)
             if (
-                professor_console.STAGING_NAME_TOKEN in source_path.name
+                live_console.STAGING_NAME_TOKEN in source_path.name
                 and Path(destination) == output
             ):
                 raise OSError("simulated staging install failure")
             return real_rename(source, destination, *args, **kwargs)
 
         with patch.object(
-            professor_console.os,
+            live_console.os,
             "rename",
             side_effect=fail_staging_install,
         ):
@@ -351,17 +387,17 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
                 output,
                 "--overwrite",
             )
-        self.assertEqual(status, professor_console.EXIT_OUTPUT)
+        self.assertEqual(status, live_console.EXIT_OUTPUT)
         self.assertIn("simulated staging install failure", stderr)
         self.assertEqual(tree_snapshot(output), prior)
-        professor_console._validate_owned_run(output)
+        live_console._validate_owned_run(output)
 
     def test_target_change_between_validation_and_commit_is_refused(self):
         output = self.root / "race-run"
         first, _stdout, first_stderr = self.run_console(output)
-        self.assertEqual(first, professor_console.EXIT_SUCCESS, first_stderr)
+        self.assertEqual(first, live_console.EXIT_SUCCESS, first_stderr)
         prior_directories, prior_files = tree_snapshot(output)
-        original_write = professor_console._write_run
+        original_write = live_console._write_run
 
         def inject_change_after_staging(**kwargs):
             result = original_write(**kwargs)
@@ -372,7 +408,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
             return result
 
         with patch.object(
-            professor_console,
+            live_console,
             "_write_run",
             side_effect=inject_change_after_staging,
         ):
@@ -380,7 +416,7 @@ class ProfessorConsoleFilesystemSafetyTests(unittest.TestCase):
                 output,
                 "--overwrite",
             )
-        self.assertEqual(status, professor_console.EXIT_UNSAFE_TARGET)
+        self.assertEqual(status, live_console.EXIT_UNSAFE_TARGET)
         self.assertIn("Unsafe output target", stderr)
         self.assertEqual(
             (output / "race-sentinel.txt").read_text(encoding="utf-8"),

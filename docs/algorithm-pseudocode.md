@@ -73,7 +73,7 @@ PATCHCORE_FIT_NORMAL(samples, normal_fit_manifest_hash):
     RETURN artifact
 ```
 
-The professor demonstration never calls fitting.
+The technical demonstration never calls fitting.
 
 ## 3. PatchCore image analysis
 
@@ -104,7 +104,7 @@ PATCHCORE_ANALYSE(image, model_artifact, calibration_artifact, operating_point_i
     RETURN NormalFeatureAnalysisResult with map/artifact/configuration hashes
 ```
 
-The professor client fixes `operating_point_id = fp-budget-0.50` and does not calibrate.
+The technical demonstration client fixes `operating_point_id = fp-budget-0.50` and does not calibrate.
 
 ## 4. Candidate-level hybrid fusion
 
@@ -172,14 +172,14 @@ V2_EXECUTE(specification, ordered_samples, optional_sink):
     RETURN in-memory report
 ```
 
-The professor demonstration does not invoke this procedure and cannot write evaluation rows.
+The technical demonstration does not invoke this procedure and cannot write evaluation rows.
 
-## 6. Future professor-data ingestion
+## 6. Future private-data ingestion
 
-Specification boundary: `docs/professor-data-adapter.md`. No implementation or professor data is present.
+Specification boundary: `docs/private-dataset-adapter.md`. No implementation or private collaborator data is present.
 
 ```text
-PROFESSOR_DATA_INGEST(adapter, approved_intake_manifest):
+PRIVATE_DATA_INGEST(adapter, approved_intake_manifest):
     REQUIRE written licence, usage authority, confidentiality class, and storage owner
     REQUIRE source references remain outside the public repository
     samples ← adapter.samples() in immutable sample-ID order

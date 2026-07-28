@@ -1,4 +1,4 @@
-# Professor Technical Handoff
+# StructVision-AI Technical Handoff
 
 ## 1. What the system currently does
 
@@ -19,14 +19,14 @@ python -m pip install '.[demo]'
 
 No API key or paid service is required. After installation, classical analysis is offline.
 
-## 4. Run the dedicated professor console
+## 4. Run the dedicated live console
 
 Use the stable presentation command:
 
 ```bash
-structvision-professor-demo \
+structvision-live-demo \
   --input inspection.png \
-  --output-dir build/professor-demo-runs/demo-run
+  --output-dir build/live-demo-runs/demo-run
 ```
 
 It validates the image, declares colour handling and dimensions, executes the
@@ -41,13 +41,13 @@ demo-run/
 ├── OUTPUT/overlay.png, proposals.csv, result.json,
 │   technical-summary.txt, masks/*.png
 ├── RUN_MANIFEST.json
-├── .structvision-professor-console-owner.json
+├── .structvision-live-console-owner.json
 └── CONSOLE_LOG.txt
 ```
 
 Existing directories are never replaced merely because `--overwrite` is
 explicit. An existing-run update is allowed only when the exact directory has the
-fixed-schema ownership marker from a completed professor-console run and the
+fixed-schema ownership marker from a completed live-console run and the
 marker, manifest, payload hashes, and complete directory contents all validate.
 The new run is fully generated in a private sibling staging directory; a
 failed analysis, serialization, validation, or installation preserves the
@@ -56,23 +56,30 @@ targets are refused. Persistent files and protected temporary artifacts stay
 inside the selected run directory. The general `structvision-analyse` CLI
 remains unchanged and no-write by default.
 
+The live ownership identities are
+`.structvision-live-console-owner.json`,
+`structvision-live-console-run-owner-v1`, `structvision-live-demo`, and
+`structvision-live-run-manifest-v1`. Outputs from the retired naming scheme are
+not silently accepted: they remain preserved as unowned directories and require
+manual removal if no longer needed.
+
 ## 5. Inspect the algorithm
 
 - Public API: `src/structvision/api.py`
 - Immutable configuration: `src/structvision/configuration.py`
 - Frozen compatibility boundary: `src/structvision/classical.py`
 - Typed results: `src/structvision/types.py`
-- Professor console wrapper: `src/structvision/professor_console.py`
+- Live console wrapper: `src/structvision/live_console.py`
 - Protected classical implementation: `preprocess.py`, `feature_extraction.py`, `region_proposal.py`, `scoring.py`
 - Learned baseline: `src/structvision/normal_feature/`
 - Rejected hybrid: `src/structvision/hybrid/`
 - V2 evaluation: `scientific_contract/`
 - Formal detail: [Algorithm Specification](algorithm-specification.md), [Pseudocode](algorithm-pseudocode.md), [Code Guide](code-structure-guide.md)
 
-## 6. Run the professor Streamlit alternative
+## 6. Run the StructVision Streamlit alternative
 
 ```bash
-python -m streamlit run apps/professor_demo.py
+python -m streamlit run apps/structvision_demo.py
 ```
 
 Upload bytes are decoded and retained in session memory only. The client does not use the broad legacy research UI or its persistence paths.
@@ -80,10 +87,10 @@ Upload bytes are decoded and retained in session memory only. The client does no
 ## 7. Build and verify the clean drive handoff
 
 ```bash
-python scripts/build_professor_handoff.py \
-  --output "/path/to/StructVision-AI-Professor-Handoff"
-python scripts/build_professor_handoff.py \
-  --verify "/path/to/StructVision-AI-Professor-Handoff"
+python scripts/build_technical_handoff.py \
+  --output "/path/to/StructVision-AI-Technical-Handoff"
+python scripts/build_technical_handoff.py \
+  --verify "/path/to/StructVision-AI-Technical-Handoff"
 ```
 
 The builder requires a clean worktree, uses `git archive HEAD` for the source
@@ -91,7 +98,7 @@ ZIP, builds one deterministic synthetic-fixture example, records commit/version/
 platform/timestamp/count/size, writes SHA-256 values in deterministic order, and
 then verifies the result. It excludes virtual environments, Git internals,
 caches, databases, historical stores, learned weights and memories, bulk
-datasets, private images, professor data, absolute user-home paths, OS metadata,
+datasets, private images, private collaborator data, absolute user-home paths, OS metadata,
 and unrelated projects.
 
 The drive supports four different contexts: live demonstration on the prepared
@@ -131,7 +138,7 @@ See [Research Evidence Summary](research-evidence-summary.md).
 
 The fixed protocol allowed at most a `0.02` overall sensitivity loss and required image-level sensitivity preservation. Hybrid micro sensitivity fell from `0.770833` to `0.750000`: loss `0.020833`, exceeding the margin by about `0.000833`. Image-level sensitivity fell from `0.894737` to `0.868421`. Burden and precision improvements do not override those failures.
 
-## 12. Information required from the professor
+## 12. Information required from a domain collaborator
 
 - intended inspection question and acceptable proposal role;
 - image formats, bit depth, colour, resolution, cameras, and acquisition conditions;
@@ -145,7 +152,7 @@ The fixed protocol allowed at most a `0.02` overall sensitivity loss and require
 ## 13. Future data-integration sequence
 
 1. Agree written data authority and security controls.
-2. Implement a private `ProfessorDatasetAdapter`.
+2. Implement a private `PrivateDatasetAdapter`.
 3. Validate identities, formats, grouping, and annotations.
 4. Lock a group-aware split before method access.
 5. Run non-performance intake smoke checks.
@@ -162,7 +169,7 @@ Private paths and metadata remain outside Git. Images are not automatically uplo
 - verify the handoff before and after copying to the external drive;
 - copy the handoff directory, not the working clone or virtual environment;
 - keep any non-fixture live run outside the immutable handoff;
-- confirm no private or professor image was substituted into `INPUT/`;
+- confirm no private or private collaborator image was substituted into `INPUT/`;
 - safely eject the drive;
 - delete temporary authorised-image runs after the meeting under the agreed
   retention policy, including trash if required;

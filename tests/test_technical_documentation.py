@@ -10,14 +10,14 @@ DOCS = (
     ROOT / "docs" / "algorithm-specification.md",
     ROOT / "docs" / "algorithm-pseudocode.md",
     ROOT / "docs" / "code-structure-guide.md",
-    ROOT / "docs" / "professor-data-adapter.md",
-    ROOT / "docs" / "professor-handoff.md",
-    ROOT / "docs" / "professor-demo-runbook.md",
+    ROOT / "docs" / "private-dataset-adapter.md",
+    ROOT / "docs" / "technical-handoff.md",
+    ROOT / "docs" / "live-demo-runbook.md",
     ROOT / "docs" / "research-evidence-summary.md",
 )
 
 
-class ProfessorDocumentationTests(unittest.TestCase):
+class TechnicalDocumentationTests(unittest.TestCase):
     def test_all_relative_markdown_links_resolve(self):
         files = DOCS + (ROOT / "README.md",)
         pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -109,17 +109,17 @@ class ProfessorDocumentationTests(unittest.TestCase):
                 self.assertNotIn(phrase, text, f"{phrase!r} in {document.name}")
 
     def test_required_handoff_and_adapter_sections_exist(self):
-        handoff = (ROOT / "docs" / "professor-handoff.md").read_text(encoding="utf-8")
+        handoff = (ROOT / "docs" / "technical-handoff.md").read_text(encoding="utf-8")
         for heading in (
             "What the system currently does",
             "What it does not yet prove",
             "Install the base system",
             "Why the hybrid was rejected",
-            "Information required from the professor",
+            "Information required from a domain collaborator",
             "Proposed pilot protocol",
         ):
             self.assertIn(heading, handoff)
-        adapter = (ROOT / "docs" / "professor-data-adapter.md").read_text(encoding="utf-8")
+        adapter = (ROOT / "docs" / "private-dataset-adapter.md").read_text(encoding="utf-8")
         for field in (
             "sample_id",
             "image_content_sha256",

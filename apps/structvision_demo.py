@@ -1,4 +1,4 @@
-"""Thin professor-facing Streamlit client for public StructVision interfaces."""
+"""Thin Streamlit client for public StructVision demonstration interfaces."""
 
 from __future__ import annotations
 
@@ -246,7 +246,7 @@ def _analysis_workspace(analysis) -> None:
 def main() -> None:
     runtime = LearnedRuntimePaths.from_environment()
     st.title("StructVision-AI")
-    st.caption("Professor-ready algorithm demonstration and technical handoff")
+    st.caption("Live inspection console and technical-validation interface")
     st.info(
         "This client is an algorithmic inspection interface. It proposes regions for "
         "technical review; it is not a defect classifier, engineering diagnosis, or "
@@ -338,7 +338,7 @@ def main() -> None:
         if st.button("Run local analysis", type="primary", disabled=decoded is None):
             try:
                 with st.spinner("Running the selected immutable method locally…"):
-                    st.session_state["professor_analysis"] = analyse_demonstration_image(
+                    st.session_state["live_analysis"] = analyse_demonstration_image(
                         decoded,
                         method_id=method_id,
                         runtime=runtime,
@@ -347,7 +347,7 @@ def main() -> None:
                 st.error(str(error))
             except Exception as error:
                 st.error(f"{type(error).__name__}: {error}")
-        current = st.session_state.get("professor_analysis")
+        current = st.session_state.get("live_analysis")
         if current is not None:
             _analysis_workspace(current)
     with pipeline:
@@ -371,7 +371,7 @@ def main() -> None:
             "Classical scores are review heuristics. PatchCore values are distances. "
             "Hybrid values are fixed linear rank scores. None is a probability."
         )
-        current = st.session_state.get("professor_analysis")
+        current = st.session_state.get("live_analysis")
         if current is None:
             st.info("Run an image to inspect concrete candidate evidence.")
         else:
@@ -385,7 +385,7 @@ def main() -> None:
         )
     with architecture:
         st.code(
-            "Professor client\n"
+            "Technical demonstration client\n"
             "  ↓ public structvision demonstration facade\n"
             "  ↓ public typed detector APIs\n"
             "  ↓ protected immutable implementations\n"
@@ -416,7 +416,7 @@ def main() -> None:
             "and split-lock identity."
         )
         st.warning(
-            "This demonstration does not read professor data, modify a registry, upload "
+            "This demonstration does not read private collaborator data, modify a registry, upload "
             "images, or create evaluation rows."
         )
     with reproducibility:
@@ -432,7 +432,7 @@ def main() -> None:
         )
         st.code(
             "structvision-analyse --input inspection.png --method classical\n"
-            "python -m streamlit run apps/professor_demo.py",
+            "python -m streamlit run apps/structvision_demo.py",
             language="bash",
         )
 

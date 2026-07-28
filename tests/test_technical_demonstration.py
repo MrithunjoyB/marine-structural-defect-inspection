@@ -134,7 +134,7 @@ class DemonstrationExecutionTests(unittest.TestCase):
 
     def test_exports_have_explicit_semantics_and_no_absolute_paths(self):
         payload = json.loads(analysis_json_bytes(self.analysis))
-        self.assertEqual(payload["schema_version"], "structvision-professor-analysis-v1")
+        self.assertEqual(payload["schema_version"], "structvision-demonstration-analysis-v1")
         self.assertEqual(payload["method"]["method_id"], CLASSICAL_METHOD)
         self.assertFalse(payload["input"]["absolute_path_recorded"])
         self.assertEqual(

@@ -2,7 +2,7 @@
 
 ## Decision
 
-`SYN-PROPOSAL-HYBRID-DEV-001` version 1 completed one 72-image, three-method `structvision-eval-v2` holdout attempt. The outcome is **development candidate rejected under the predeclared protocol**. It is **development holdout — non-confirmatory** and supports no real-world, transferability, publication, novelty, deployment, professor-data, winner, or global-superiority claim.
+`SYN-PROPOSAL-HYBRID-DEV-001` version 1 completed one 72-image, three-method `structvision-eval-v2` holdout attempt. The outcome is **development candidate rejected under the predeclared protocol**. It is **development holdout — non-confirmatory** and supports no real-world, transferability, publication, novelty, deployment, private-data, winner, or global-superiority claim.
 
 At the primary 0.50 budget the hybrid materially reduced clean proposal burden and preserved thin-crack, pitting, weld, and assigned-pair localisation. It failed because micro sensitivity decreased from `0.770833` to `0.750000`, a decrease of `0.020833` that narrowly exceeded the fixed `0.02` margin, and image-level sensitivity decreased from `0.894737` to `0.868421`. The holdout was not rerun or used for modification.
 
@@ -21,7 +21,7 @@ At the primary 0.50 budget the hybrid materially reduced clean proposal burden a
 | Historical databases | `9a77d748dbf9780f5f0e104bea3412ddaadcad10b54a2c1fceed0e532acef640`; `1ebde1de1f065b5b220366798147beb67dd10a446b7cd8840f988c9aeda9ce92` |
 | Historical automatic rows | 888 before and after |
 
-All seven protected classical source hashes, the prior 144-row PatchCore development store hash `3a0200e75fde0633587f961d297d91259868df7120f176f5abfa2af9e73febf1`, prior model/calibration files, registry database/manifest, and environment lock were identical before and after. No historical test or professor image was decoded by this task.
+All seven protected classical source hashes, the prior 144-row PatchCore development store hash `3a0200e75fde0633587f961d297d91259868df7120f176f5abfa2af9e73febf1`, prior model/calibration files, registry database/manifest, and environment lock were identical before and after. No historical test or private collaborator image was decoded by this task.
 
 ## Roles and category counts
 
@@ -100,4 +100,4 @@ No historical store, previous v2 store, prior learned artifact, dataset, image, 
 
 ## Remaining risks
 
-The synthetic generator, prior validation exposure, only 19 fusion-fit clean images, fixed PatchCore resolution, threshold transport across clean cohorts, one missed texture-only component, specular burden, and absence of uncertainty calibration limit interpretation. Professor data remains future work under a new intake and evaluation protocol.
+The synthetic generator, prior validation exposure, only 19 fusion-fit clean images, fixed PatchCore resolution, threshold transport across clean cohorts, one missed texture-only component, specular burden, and absence of uncertainty calibration limit interpretation. Private collaborator data remains future work under a new intake and evaluation protocol.
