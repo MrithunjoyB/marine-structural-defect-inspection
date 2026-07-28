@@ -6,6 +6,7 @@
 flowchart TD
     UI["apps/professor_demo.py<br/>thin Streamlit client"] --> DEMO["structvision public demonstration facade"]
     CLI["structvision-analyse<br/>explicit-output CLI"] --> DEMO
+    CONSOLE["structvision-professor-demo<br/>professor run directory"] --> DEMO
     DEMO --> API["StructuralAnomalyDetector public API"]
     DEMO -. "optional exact environment" .-> NF["normal_feature public API"]
     DEMO -. "optional exact environment" .-> HY["hybrid public API"]
@@ -36,7 +37,9 @@ The algorithms never import the client. The client imports only public names fro
 | `src/structvision/hybrid/` | Protected protocol, candidate evidence, constrained fusion selection, artifact replay, detector, one-shot holdout | `ProposalGuidedHybridDetector`, `HybridAnalysisResult`, fusion types | public classical and normal-feature APIs | Rejected development candidate; no default write; exact learned environment/artifacts required | `test_hybrid_*.py` |
 | `src/structvision/demonstration.py` | Safe in-memory decoding, method readiness, one-image orchestration, result adaptation, faithful rendering, in-memory exports | `DecodedDemonstrationImage`, `DemonstrationAnalysis`, `MethodStatus` | public detector paths, Pillow/OpenCV/NumPy | Presentation only; no detector/evaluation mathematics; no writes or network | `test_professor_demonstration.py`, `test_professor_architecture.py` |
 | `src/structvision/cli.py` | `structvision-analyse`; terminal summary and explicitly requested output paths | exit-code contract | demonstration facade | No-write default; no database/API key/network | `test_professor_cli.py` |
+| `src/structvision/professor_console.py` | `structvision-professor-demo`; one stable frozen execution and explicit INPUT/PROCESSING/OUTPUT presentation record | deterministic exit codes; run manifest | only public `structvision` facade plus standard presentation/file encoders | No detector mathematics, network, installation, model download, API key, database, or experiment call | `test_professor_console.py` |
 | `apps/professor_demo.py` | Focused professor workflow and click-initiated downloads | Streamlit session-only result | only public `structvision` imports | Thin client; upload bytes held in memory; no implicit persistence | `test_professor_architecture.py`; Streamlit smoke |
+| `scripts/build_professor_handoff.py` | Build/verify the small clean drive package and committed-source ZIP | checksum manifest; version/exclusion audit | `git archive HEAD`, professor console | Refuses a dirty worktree; never recursively copies runtime content | `test_professor_handoff_builder.py` |
 | future professor adapter | Private typed records and secure image/truth opening | interface specified only | external private storage + public detector | Future direction; not implemented; never Git-tracked | future contract tests after authorised pilot |
 
 ## Protected classical call path
@@ -65,9 +68,30 @@ bytes or deterministic UI fixture
   → explicit click or output-path export
 ```
 
+The professor console adds a presentation-only persistence boundary after the
+typed result:
+
+```text
+validated local file
+  → one public frozen-classical call
+  → typed in-memory result
+  → INPUT / PROCESSING / OUTPUT serialization
+  → RUN_MANIFEST.json + CONSOLE_LOG.txt
+```
+
+The processing folder contains only exposed anomaly evidence, measured timings,
+stage descriptions, and returned masks/diagnostics. Internal images that the
+frozen API does not expose are labelled unavailable, not reconstructed.
+
 ## Write audit
 
-The new one-image path does not construct `V2SQLiteResultSink`, a dataset registry, a legacy application configuration, or any directory sink. PNG/JSON/CSV/summary data are built in memory. CLI writing occurs only when an output argument is present. Streamlit transfers a download only from an explicit download control.
+The new one-image path does not construct `V2SQLiteResultSink`, a dataset
+registry, a legacy application configuration, or an experiment executor.
+PNG/JSON/CSV/summary data are built in memory. General CLI writing occurs only
+when an output argument is present. Professor-console writing is confined to
+the required explicit output directory; protected legacy temporaries are
+redirected into and removed from that directory. Streamlit transfers a download
+only from an explicit download control.
 
 The legacy `app.py` remains separate and continues to own its existing upload/output/ablation/review/report writes. The professor client does not import it.
 
@@ -77,5 +101,7 @@ The legacy `app.py` remains separate and continues to own its existing upload/ou
 2. Inspect `src/structvision/api.py` and `src/structvision/types.py`.
 3. Follow the frozen adapter into `src/structvision/classical.py`.
 4. Inspect optional learned boundaries in `normal_feature/` and `hybrid/`.
-5. Confirm the thin client in `apps/professor_demo.py`.
-6. Review `scientific_contract/` separately from direct one-image analysis.
+5. Confirm the console wrapper in `src/structvision/professor_console.py`.
+6. Confirm the thin client in `apps/professor_demo.py`.
+7. Review `scripts/build_professor_handoff.py` and its exclusion verifier.
+8. Review `scientific_contract/` separately from direct one-image analysis.

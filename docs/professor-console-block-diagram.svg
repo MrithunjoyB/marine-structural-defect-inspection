@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1760" viewBox="0 0 1600 1760" role="img" aria-labelledby="title description">
+  <title id="title">StructVision-AI professor console architecture</title>
+  <desc id="description">Two diagrams show the input, processing, typed result, and explicit output pipeline and the client-to-public-API architecture with classical stable, PatchCore development, and hybrid rejected status.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#216577"/>
+    </marker>
+    <marker id="arrow-muted" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#6f7f85"/>
+    </marker>
+    <style>
+      .background { fill: #f4f7f7; }
+      .panel { fill: #ffffff; stroke: #c7d5d8; stroke-width: 2; }
+      .stage { fill: #edf6f7; stroke: #216577; stroke-width: 2; }
+      .output { fill: #eaf5ee; stroke: #2b6d46; stroke-width: 2; }
+      .client { fill: #eef2f9; stroke: #345d8c; stroke-width: 2; }
+      .development { fill: #fff7df; stroke: #8a6a16; stroke-width: 2; }
+      .rejected { fill: #fff0ee; stroke: #9a3f34; stroke-width: 2; }
+      .title { fill: #173941; font-family: Arial, Helvetica, sans-serif; font-size: 34px; font-weight: 700; }
+      .subtitle { fill: #425a61; font-family: Arial, Helvetica, sans-serif; font-size: 21px; }
+      .node-title { fill: #173941; font-family: Arial, Helvetica, sans-serif; font-size: 23px; font-weight: 700; text-anchor: middle; }
+      .node-copy { fill: #385159; font-family: Arial, Helvetica, sans-serif; font-size: 19px; text-anchor: middle; }
+      .small { fill: #50676e; font-family: Menlo, Consolas, monospace; font-size: 17px; text-anchor: middle; }
+      .status { fill: #173941; font-family: Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 700; text-anchor: middle; }
+      .arrow { fill: none; stroke: #216577; stroke-width: 3; marker-end: url(#arrow); }
+      .arrow-muted { fill: none; stroke: #6f7f85; stroke-width: 3; stroke-dasharray: 10 8; marker-end: url(#arrow-muted); }
+      .edge-label { fill: #53676d; font-family: Arial, Helvetica, sans-serif; font-size: 17px; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect class="background" x="0" y="0" width="1600" height="1760"/>
+  <rect class="panel" x="60" y="55" width="1480" height="1050" rx="20"/>
+  <text class="title" x="110" y="115">1. Input–processing–output pipeline</text>
+  <text class="subtitle" x="110" y="153">Frozen mathematics remains in the protected modules; the console only orchestrates public interfaces and explicit exports.</text>
+
+  <rect class="stage" x="440" y="190" width="720" height="92" rx="14"/>
+  <text class="node-title" x="800" y="226">INPUT IMAGE</text>
+  <text class="node-copy" x="800" y="258">validated local PNG / JPEG / TIFF</text>
+
+  <path class="arrow" d="M800 282 L800 323"/>
+  <rect class="stage" x="355" y="323" width="890" height="112" rx="14"/>
+  <text class="node-title" x="800" y="360">INPUT VALIDATION AND COLOUR HANDLING</text>
+  <text class="small" x="800" y="392">src/structvision/inputs.py</text>
+  <text class="small" x="800" y="417">src/structvision/demonstration.py</text>
+
+  <path class="arrow" d="M800 435 L800 476"/>
+  <rect class="stage" x="440" y="476" width="720" height="88" rx="14"/>
+  <text class="node-title" x="800" y="511">PREPROCESSING</text>
+  <text class="small" x="800" y="542">preprocess.py</text>
+
+  <path class="arrow" d="M800 564 L800 605"/>
+  <rect class="stage" x="440" y="605" width="720" height="88" rx="14"/>
+  <text class="node-title" x="800" y="640">FEATURE EXTRACTION</text>
+  <text class="small" x="800" y="671">feature_extraction.py</text>
+
+  <path class="arrow" d="M800 693 L800 734"/>
+  <rect class="stage" x="355" y="734" width="890" height="88" rx="14"/>
+  <text class="node-title" x="800" y="769">REGION PROPOSAL / BINARY MASK GENERATION</text>
+  <text class="small" x="800" y="800">region_proposal.py</text>
+
+  <path class="arrow" d="M800 822 L800 863"/>
+  <rect class="stage" x="355" y="863" width="890" height="88" rx="14"/>
+  <text class="node-title" x="800" y="898">CONTEXTUAL SCORING AND RANKING</text>
+  <text class="small" x="800" y="929">scoring.py</text>
+
+  <path class="arrow" d="M800 951 L800 992"/>
+  <rect class="stage" x="330" y="992" width="940" height="88" rx="14"/>
+  <text class="node-title" x="800" y="1027">TYPED RESULT AND PROVENANCE</text>
+  <text class="small" x="800" y="1058">src/structvision/classical.py · src/structvision/types.py</text>
+
+  <rect class="client" x="90" y="330" width="230" height="96" rx="14"/>
+  <text class="node-copy" x="205" y="365">General CLI</text>
+  <text class="small" x="205" y="394">src/structvision/</text>
+  <text class="small" x="205" y="416">cli.py</text>
+  <path class="arrow-muted" d="M320 378 L355 378"/>
+
+  <rect class="client" x="1280" y="330" width="230" height="96" rx="14"/>
+  <text class="node-copy" x="1395" y="365">Professor console</text>
+  <text class="small" x="1395" y="394">src/structvision/</text>
+  <text class="small" x="1395" y="416">professor_console.py</text>
+  <path class="arrow-muted" d="M1280 378 L1245 378"/>
+
+  <rect class="output" x="380" y="1135" width="840" height="105" rx="14"/>
+  <text class="node-title" x="800" y="1176">EXPLICIT OUTPUT FILES</text>
+  <text class="node-copy" x="800" y="1210">OVERLAY · CSV · JSON · MASKS · SUMMARY</text>
+  <path class="arrow" d="M800 1080 L800 1135"/>
+
+  <rect class="panel" x="60" y="1280" width="1480" height="420" rx="20"/>
+  <text class="title" x="110" y="1340">2. Client and method architecture</text>
+
+  <rect class="client" x="100" y="1395" width="310" height="92" rx="14"/>
+  <text class="node-title" x="255" y="1430">Professor clients</text>
+  <text class="node-copy" x="255" y="1461">console / Streamlit</text>
+
+  <path class="arrow" d="M410 1441 L495 1441"/>
+  <rect class="stage" x="495" y="1395" width="280" height="92" rx="14"/>
+  <text class="node-title" x="635" y="1430">Public API</text>
+  <text class="node-copy" x="635" y="1461">write-free analysis</text>
+
+  <path class="arrow" d="M775 1441 L860 1441"/>
+  <rect class="output" x="860" y="1395" width="315" height="92" rx="14"/>
+  <text class="node-title" x="1018" y="1430">Frozen classical</text>
+  <text class="status" x="1018" y="1461">STABLE DEFAULT</text>
+
+  <path class="arrow" d="M1175 1441 L1260 1441"/>
+  <rect class="stage" x="1260" y="1395" width="230" height="92" rx="14"/>
+  <text class="node-title" x="1375" y="1430">Typed result</text>
+  <text class="node-copy" x="1375" y="1461">explicit outputs</text>
+
+  <path class="arrow-muted" d="M635 1487 L635 1555 L810 1555"/>
+  <text class="edge-label" x="705" y="1534">optional research branch</text>
+  <rect class="development" x="810" y="1510" width="310" height="92" rx="14"/>
+  <text class="node-title" x="965" y="1545">PatchCore</text>
+  <text class="status" x="965" y="1576">DEVELOPMENT BASELINE</text>
+
+  <path class="arrow-muted" d="M635 1487 L635 1642 L810 1642"/>
+  <rect class="rejected" x="810" y="1610" width="430" height="70" rx="14"/>
+  <text class="node-title" x="1025" y="1640">Proposal-guided hybrid</text>
+  <text class="status" x="1025" y="1667">REJECTED DEVELOPMENT CANDIDATE</text>
+</svg>

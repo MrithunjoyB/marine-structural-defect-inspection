@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StructVision-AI Offline Professor Console Handoff</title>
+  <style>
+    :root { color-scheme:light; --navy:#173941; --teal:#216577; --muted:#52666c; --line:#ccd8da; --paper:#fff; --wash:#f2f6f6; --green:#276644; --amber:#80620f; --red:#963c32; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--navy); background:var(--wash); font-family:Arial, Helvetica, sans-serif; line-height:1.55; }
+    header { background:linear-gradient(135deg,#173941,#216577); color:#fff; padding:44px max(24px,calc((100% - 1120px)/2)); }
+    header p { max-width:850px; color:#e4eff1; }
+    .eyebrow { margin:0 0 8px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; font-size:.8rem; }
+    h1 { margin:0; font-size:clamp(2rem,5vw,3.4rem); line-height:1.1; }
+    h2 { margin:0 0 14px; font-size:1.55rem; }
+    h3 { margin:22px 0 8px; font-size:1.1rem; }
+    main { width:min(1120px,calc(100% - 32px)); margin:28px auto 64px; display:grid; grid-template-columns:250px minmax(0,1fr); gap:28px; align-items:start; }
+    nav { position:sticky; top:18px; padding:18px; background:var(--paper); border:1px solid var(--line); border-radius:14px; }
+    nav strong { display:block; margin-bottom:8px; }
+    nav a { display:block; color:var(--teal); padding:4px 0; text-decoration:none; font-size:.92rem; }
+    nav a:hover, nav a:focus { text-decoration:underline; }
+    article { min-width:0; }
+    section { background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:26px; margin-bottom:20px; }
+    p, li { color:#334f57; }
+    code { color:#163f4b; background:#eaf1f2; padding:.12rem .35rem; border-radius:4px; }
+    pre { margin:14px 0; padding:16px; overflow:auto; color:#e9f3f4; background:#15343c; border-radius:9px; line-height:1.45; }
+    pre code { color:inherit; background:none; padding:0; }
+    table { width:100%; border-collapse:collapse; margin:14px 0; }
+    th, td { text-align:left; vertical-align:top; border-bottom:1px solid var(--line); padding:10px 8px; }
+    th { color:var(--navy); }
+    .status { display:inline-block; border-radius:99px; padding:4px 9px; font-weight:700; font-size:.82rem; }
+    .stable { color:var(--green); background:#e8f4ed; }
+    .development { color:var(--amber); background:#fff5d5; }
+    .rejected { color:var(--red); background:#ffebe8; }
+    .notice { border-left:4px solid var(--teal); padding:12px 16px; background:#edf5f6; }
+    .warning { border-left-color:var(--red); background:#fff0ee; }
+    .diagram { width:100%; height:auto; border:1px solid var(--line); border-radius:10px; }
+    .tree { white-space:pre; overflow:auto; font-family:Menlo, Consolas, monospace; color:#25464f; }
+    details { border-top:1px solid var(--line); padding:12px 0; }
+    summary { cursor:pointer; color:var(--navy); font-weight:700; }
+    footer { color:var(--muted); text-align:center; padding:0 20px 32px; }
+    @media (max-width:820px) { main { grid-template-columns:1fr; } nav { position:static; columns:2; } nav strong { column-span:all; } }
+    @media (max-width:520px) { nav { columns:1; } section { padding:19px; } th,td { display:block; padding:7px 4px; } th { border:0; padding-top:13px; } }
+    @media print { body { background:#fff; } header { background:#fff; color:var(--navy); padding:20px 0; } header p { color:var(--muted); } main { display:block; width:100%; margin:0; } nav { display:none; } section { break-inside:avoid; border:0; padding:12px 0; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">Offline engineering/research handoff</p>
+    <h1>StructVision-AI Professor Console</h1>
+    <p>A local, inspectable demonstration of the frozen classical anomaly-proposal pipeline, its typed outputs, source-code boundaries, evidence status, and safe drive handoff.</p>
+  </header>
+  <main>
+    <nav aria-label="Guide sections">
+      <strong>Guide</strong>
+      <a href="#purpose">1. Project purpose</a>
+      <a href="#status">2. Method status</a>
+      <a href="#diagram">3. Block diagram</a>
+      <a href="#ipo">4. Input–process–output</a>
+      <a href="#commands">5. Terminal commands</a>
+      <a href="#folders">6. Folder structure</a>
+      <a href="#outputs">7. Output definitions</a>
+      <a href="#source">8. Source modules</a>
+      <a href="#script">9. Demonstration script</a>
+      <a href="#evidence">10. Evidence and limitations</a>
+      <a href="#hybrid">11. Rejected hybrid</a>
+      <a href="#future">12. Future data</a>
+      <a href="#security">13. Security and privacy</a>
+      <a href="#troubleshooting">14. Troubleshooting</a>
+      <a href="#questions">15. Professor questions</a>
+    </nav>
+    <article>
+      <section id="purpose">
+        <h2>1. Project purpose</h2>
+        <p>StructVision-AI takes one local image and returns ranked visual-anomaly proposals for expert review. Each returned proposal has a binary mask, a mask-derived half-open bounding box, heuristic evidence, and provenance. The current system supports method inspection and research planning; it does not classify structural damage or decide engineering fitness.</p>
+        <p class="notice warning"><strong>Required interpretation:</strong> Review proposals only — not confirmed defects or engineering diagnosis.</p>
+      </section>
+
+      <section id="status">
+        <h2>2. Current method status</h2>
+        <table>
+          <thead><tr><th>Method</th><th>Status</th><th>Professor demonstration role</th></tr></thead>
+          <tbody>
+            <tr><td><code>structvision-classical-baseline-v1-frozen</code></td><td><span class="status stable">Stable frozen baseline</span></td><td>Live default. Runs in the base environment without weights.</td></tr>
+            <tr><td>PatchCore</td><td><span class="status development">Protected development baseline</span></td><td>Optional research comparison in an exact learned environment; not needed live.</td></tr>
+            <tr><td>Proposal-guided hybrid</td><td><span class="status rejected">Rejected development candidate</span></td><td>Comparison record only. Never presented as the recommended default.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="diagram">
+        <h2>3. Block diagram</h2>
+        <img class="diagram" src="professor-console-block-diagram.svg" alt="Input to validation, preprocessing, feature extraction, proposal generation, scoring, typed result and explicit outputs, plus client and method-status architecture">
+        <p>The console and Streamlit clients call the public StructVision facade. The frozen adapter invokes the byte-protected classical modules and returns typed in-memory results. Files are written only by an explicit output path.</p>
+      </section>
+
+      <section id="ipo">
+        <h2>4. Input–process–output explanation</h2>
+        <h3>Input</h3>
+        <p>The command accepts one PNG, JPEG, or TIFF. It validates encoded size, format agreement, pixel dimensions, bit depth, and colour mode. Alpha-bearing files require an explicit drop or composite policy. The run stores a lossless normalised PNG and records both the source-encoded hash and normalised-copy hash.</p>
+        <h3>Processing</h3>
+        <p>The stable method normalises to BGR, applies the frozen preprocessing configuration, extracts the protected feature families, generates and refines candidate masks, applies contextual scoring, and returns the frozen ranking. The command executes this detector exactly once. Timings are measured fields returned by the API, not fabricated progress values.</p>
+        <h3>Output</h3>
+        <p>The run contains an overlay, tabular CSV, structured JSON, technical summary, one exact binary mask per returned proposal, exposed anomaly evidence, stage records, a console transcript, and a hash manifest. Unexposed internal stage images are explicitly labelled unavailable.</p>
+      </section>
+
+      <section id="commands">
+        <h2>5. Exact Terminal commands</h2>
+        <h3>Prepared Mac: direct live command</h3>
+        <pre><code>cd "/path/to/marine-structural-defect-inspection"
+source venv/bin/activate
+structvision-professor-demo \
+  --input "/path/to/demonstration-fixture.png" \
+  --output-dir "/path/to/demo-run"</code></pre>
+        <p>For an alpha-bearing image, add <code>--alpha-handling composite_white</code>. Existing run directories are protected. Use <code>--overwrite</code> only when the exact target may be replaced.</p>
+        <h3>Prepared Mac: one-command launcher</h3>
+        <pre><code>scripts/run_professor_demo.sh \
+  --venv "/path/to/marine-structural-defect-inspection/venv" \
+  --input "/path/to/demonstration-fixture.png" \
+  --output-base "/path/to/presentation-runs" \
+  --open</code></pre>
+        <h3>Build and verify the drive bundle</h3>
+        <pre><code>python scripts/build_professor_handoff.py \
+  --output "/path/to/StructVision-AI-Professor-Handoff"
+
+python scripts/build_professor_handoff.py \
+  --verify "/path/to/StructVision-AI-Professor-Handoff"</code></pre>
+      </section>
+
+      <section id="folders">
+        <h2>6. Run folder structure</h2>
+        <div class="tree" role="img" aria-label="Professor run directory tree">demo-run/
+├── INPUT/
+│   ├── original.png
+│   └── input-metadata.json
+├── PROCESSING/
+│   ├── pipeline-stages.json
+│   ├── stage-timings.csv
+│   ├── anomaly-evidence.png
+│   └── README.txt
+├── OUTPUT/
+│   ├── overlay.png
+│   ├── proposals.csv
+│   ├── result.json
+│   ├── technical-summary.txt
+│   └── masks/R001.png …
+├── RUN_MANIFEST.json
+└── CONSOLE_LOG.txt</div>
+      </section>
+
+      <section id="outputs">
+        <h2>7. Output-file definitions</h2>
+        <table>
+          <thead><tr><th>File</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>INPUT/original.png</code></td><td>Lossless normalised copy of the validated input. It is not research evidence merely because it was analysed.</td></tr>
+            <tr><td><code>input-metadata.json</code></td><td>Format, mode, dimensions, colour path, encoded-source hash, normalised-copy hash, and warnings.</td></tr>
+            <tr><td><code>pipeline-stages.json</code></td><td>Stage descriptions with honest exposed/unavailable status.</td></tr>
+            <tr><td><code>stage-timings.csv</code></td><td>Measured input normalisation, preprocessing, feature extraction, proposal generation, adapter/result conversion, and total timings.</td></tr>
+            <tr><td><code>anomaly-evidence.png</code></td><td>Visualisation of the already-exposed anomaly heatmap; it does not redefine a mask.</td></tr>
+            <tr><td><code>overlay.png</code></td><td>Original analysed view with direct returned masks and mask-derived boxes.</td></tr>
+            <tr><td><code>proposals.csv</code></td><td>One row per ranked candidate with half-open box, scores, selection reason, identities, and warnings.</td></tr>
+            <tr><td><code>result.json</code></td><td>Structured analysis, method/configuration identities, coordinate mapping, candidates, privacy flags, and limitations.</td></tr>
+            <tr><td><code>masks/*.png</code></td><td>Exact 0/255 binary masks in analysed-image coordinates.</td></tr>
+            <tr><td><code>RUN_MANIFEST.json</code></td><td>Execution count, platform, identities, warnings, relative file inventory, sizes, and SHA-256 values.</td></tr>
+          </tbody>
+        </table>
+        <p>Classical scores are heuristics, not probabilities or calibrated confidence. Boxes use <code>(x_min, y_min, x_max, y_max)</code> with exclusive maximum coordinates.</p>
+      </section>
+
+      <section id="source">
+        <h2>8. Important source modules</h2>
+        <table>
+          <thead><tr><th>Stage</th><th>Implementation</th></tr></thead>
+          <tbody>
+            <tr><td>Input contract and normalisation</td><td><code>src/structvision/inputs.py</code> and <code>src/structvision/demonstration.py</code></td></tr>
+            <tr><td>Preprocessing</td><td><code>preprocess.py</code></td></tr>
+            <tr><td>Feature extraction</td><td><code>feature_extraction.py</code></td></tr>
+            <tr><td>Region proposal and binary masks</td><td><code>region_proposal.py</code></td></tr>
+            <tr><td>Contextual scoring</td><td><code>scoring.py</code></td></tr>
+            <tr><td>Frozen compatibility adapter</td><td><code>src/structvision/classical.py</code></td></tr>
+            <tr><td>Typed results</td><td><code>src/structvision/types.py</code></td></tr>
+            <tr><td>Existing general CLI</td><td><code>src/structvision/cli.py</code></td></tr>
+            <tr><td>Professor console</td><td><code>src/structvision/professor_console.py</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="script">
+        <h2>9. Demonstration script</h2>
+        <ol>
+          <li>State that the screen will show review proposals, not diagnosis.</li>
+          <li>Show the fixture label: synthetic, excluded from research cohorts, and not real inspection evidence.</li>
+          <li>Run <code>structvision-professor-demo</code> and point out format, dimensions, colour path, exact method identity, and stable status.</li>
+          <li>Explain the measured stage timings after the single completed analysis.</li>
+          <li>Open <code>overlay.png</code>, then <code>proposals.csv</code>, <code>result.json</code>, and one mask.</li>
+          <li>Show the block diagram and map the stages to source files.</li>
+          <li>Close with evidence limits, rejected-hybrid status, and the future private-data protocol.</li>
+        </ol>
+        <p>Expected console headings are <strong>Input</strong>, <strong>Format</strong>, <strong>Dimensions</strong>, <strong>Colour path</strong>, <strong>Method</strong>, <strong>Status</strong>, <strong>Measured processing stages</strong>, <strong>Selected proposals</strong>, and <strong>Generated</strong>.</p>
+      </section>
+
+      <section id="evidence">
+        <h2>10. Current evidence and limitations</h2>
+        <p>Current comparative evidence is synthetic and development-only. It does not establish performance on marine structures, transfer across cameras or environments, calibrated uncertainty, publication readiness, or deployment readiness. The stable classical method is retained for transparent, local proposal generation—not because global or real-world superiority has been shown.</p>
+        <p>Live runtime varies with hardware and operating state. Measured stage timings demonstrate execution flow; they are not a benchmark claim.</p>
+      </section>
+
+      <section id="hybrid">
+        <h2>11. Why the hybrid is rejected</h2>
+        <p>The predeclared protocol allowed at most a <code>0.02</code> overall micro-sensitivity loss and also required image-level sensitivity preservation. The hybrid moved micro sensitivity from <code>0.770833</code> to <code>0.750000</code>, a loss of <code>0.020833</code>, and image sensitivity fell from <code>0.894737</code> to <code>0.868421</code>. Lower false-proposal burden and higher precision/localisation do not override those failed rules. The status therefore remains <strong>rejected development candidate</strong>; the holdout was not rerun to revise it.</p>
+      </section>
+
+      <section id="future">
+        <h2>12. Future professor-data integration</h2>
+        <ol>
+          <li>Agree written data authority, confidentiality, licence, retention, and deletion controls.</li>
+          <li>Define image formats, acquisition groups, normal/anomaly semantics, and annotation authority.</li>
+          <li>Implement a private adapter outside public Git and verify content identities.</li>
+          <li>Lock group-aware intake/development/held-back roles before method access.</li>
+          <li>Predeclare a small prospective pilot and its acceptance/failure rules.</li>
+          <li>Run through an explicit private result sink and review jointly without post-hoc holdout retuning.</li>
+        </ol>
+        <p>No professor data has been accessed or included in this handoff.</p>
+      </section>
+
+      <section id="security">
+        <h2>13. Security and privacy</h2>
+        <ul>
+          <li>Classical analysis is local and offline after dependency installation; no API key, cloud service, telemetry, or paid API is required.</li>
+          <li>The console never installs packages, downloads weights, or writes to a research database.</li>
+          <li>Run manifests store relative file names, not absolute source paths or private environment variables.</li>
+          <li>The drive source ZIP comes from committed Git content using <code>git archive HEAD</code>, not from the multi-gigabyte working directory.</li>
+          <li>Virtual environments, caches, databases, model weights, learned memories, private images, professor data, and historical result stores are prohibited from the bundle.</li>
+        </ul>
+        <h3>After the meeting</h3>
+        <p>Retain the immutable drive bundle only under the agreed project retention policy. Delete temporary presentation runs containing any caller-authorised non-fixture image when they are no longer needed, including local copies and trash, and record the deletion if project governance requires it. Do not delete reviewed scientific stores or source history as part of presentation cleanup.</p>
+      </section>
+
+      <section id="troubleshooting">
+        <h2>14. Troubleshooting</h2>
+        <table>
+          <thead><tr><th>Symptom</th><th>Response</th></tr></thead>
+          <tbody>
+            <tr><td>Command not found</td><td>Activate the prepared project environment. The launcher does not install anything.</td></tr>
+            <tr><td>Alpha policy required</td><td>Choose and record <code>drop</code>, <code>composite_black</code>, or <code>composite_white</code>.</td></tr>
+            <tr><td>Existing output directory</td><td>Choose a new timestamped directory. Use <code>--overwrite</code> only for the exact disposable target.</td></tr>
+            <tr><td>Malformed, oversized, or high-bit-depth input</td><td>Use a supported valid uint8 PNG/JPEG/TIFF; do not bypass validation during the meeting.</td></tr>
+            <tr><td>No proposals returned</td><td>This is a valid detector result, not an execution failure.</td></tr>
+            <tr><td>Missing intermediate image</td><td>Read <code>pipeline-stages.json</code>. Unexposed stages are intentionally not fabricated.</td></tr>
+            <tr><td>Checksum verification fails</td><td>Stop using the copy, recopy from the verified source bundle, and rerun <code>--verify</code>.</td></tr>
+            <tr><td>Another computer cannot run it</td><td>Install compatible platform dependencies first. The drive is source/code review material, not a universal prebuilt environment.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="questions">
+        <h2>15. Questions the professor may ask</h2>
+        <details open><summary>Is each proposal a defect?</summary><p>No. It is a visual anomaly candidate for expert review.</p></details>
+        <details><summary>Are the scores probabilities or confidence?</summary><p>No. Classical values are heuristics, PatchCore values are nearest-normal distances, and hybrid values are fixed linear rank scores.</p></details>
+        <details><summary>Why is classical the live default?</summary><p>It is the stable, frozen, transparent base method, runs locally without learned artifacts, and retains the strongest current sensitivity evidence. That is not a global-superiority claim.</p></details>
+        <details><summary>Why not present the hybrid as the improvement?</summary><p>It failed the predeclared overall and image-level sensitivity-preservation rules, so its status remains rejected.</p></details>
+        <details><summary>Did the demonstration retrain or rerun an experiment?</summary><p>No. It performs one image analysis only. It does not invoke a dataset registry, experiment executor, holdout, or evaluation store.</p></details>
+        <details><summary>Where are every internal-stage image and threshold map?</summary><p>Only artifacts already exposed by the frozen public facade are exported. Unavailable internals are labelled rather than invented or added by changing the detector.</p></details>
+        <details><summary>Can I review the source from the drive?</summary><p>Yes. The source ZIP is made from the exact recorded Git commit, and the source manifest and checksums verify it.</p></details>
+        <details><summary>Can I run this on another machine immediately?</summary><p>Only if compatible Python and platform dependencies are installed. The bundle deliberately contains no virtual environment or unverified platform wheelhouse.</p></details>
+        <details><summary>Can it use professor-provided data?</summary><p>Potentially, after written authority, private intake controls, agreed semantics, group-aware split locking, and a predeclared prospective pilot. No professor data is in this package.</p></details>
+        <details><summary>Does it require internet or an API key?</summary><p>No for the installed base analysis. Initial dependency installation on another machine is a separate platform task.</p></details>
+      </section>
+    </article>
+  </main>
+  <footer>StructVision-AI · Offline professor console handoff · Review proposals only</footer>
+</body>
+</html>

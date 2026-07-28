@@ -9,12 +9,16 @@ git branch --show-current
 git rev-parse HEAD
 git status --short
 source venv/bin/activate
-python -m pip install '.[demo]'
 structvision-analyse --help
-python -m streamlit run apps/professor_demo.py
+structvision-professor-demo --help
+python scripts/build_professor_handoff.py \
+  --verify "/path/to/StructVision-AI-Professor-Handoff"
 ```
 
-Expected: branch/commit are the intended reviewed state; worktree is clean; CLI help states classical default and no-write behavior; the Streamlit client opens with three non-hidden status cards.
+Expected: branch/commit are the intended reviewed state; worktree is clean; the
+general CLI remains compatible; the professor command requires an explicit
+output directory; and drive verification passes. Install dependencies before
+the meeting—never during the demonstration.
 
 Do not open historical/protected images. Use a caller-authorised image or a labelled deterministic demonstration fixture.
 
@@ -52,31 +56,27 @@ result = StructuralAnomalyDetector(DetectorConfig()).analyse(
 
 Explain that no database, output directory, API key, or remote service is required. A sink is optional and explicit.
 
-## 4. Run the frozen classical method — 2 minutes
+## 4. Run the frozen classical console — 2 minutes
 
-Screen: **Analyse an Image**.
-
-Select one deterministic fixture or upload one authorised PNG/JPEG/TIFF. Keep:
-
-```text
-Method: Frozen classical baseline — stable default
-```
-
-Click **Run local analysis**.
-
-Expected: completed status, dimensions, proposal count, input image, direct mask overlay, configuration hash, and warnings. If the image has alpha, state the selected composite/drop policy.
-
-CLI alternative:
+Terminal:
 
 ```bash
-structvision-analyse --input inspection.png --method classical
+structvision-professor-demo \
+  --input "/path/to/demonstration-fixture.png" \
+  --output-dir "/path/to/presentation-runs/demo-run"
 ```
 
-Expected: human-readable identity/status/hash/proposal summary and no new file.
+Expected: the command declares input format, dimensions, colour path, exact
+method identity, and stable status; prints no fabricated progress percentages;
+then prints six measured stage timings, selected proposal count, generated
+relative paths, and the review-only warning. If the image has alpha, state the
+selected composite/drop policy.
 
 ## 5. Inspect masks and ranked evidence — 2 minutes
 
-Open **Proposal Evidence** then **Candidate detail**.
+Open `OUTPUT/overlay.png`, `OUTPUT/proposals.csv`, `OUTPUT/result.json`, and one
+file under `OUTPUT/masks/`. Then open `PROCESSING/pipeline-stages.json` and
+`stage-timings.csv`.
 
 Show:
 
@@ -90,7 +90,15 @@ Show:
 - half-open crop;
 - exact binary mask.
 
-Say: “These values order review; none is a probability. The mask directly defines the displayed boundary.”
+Say: “These values order review; none is a probability. The mask directly
+defines the displayed boundary. Unexposed internal stages have not been
+invented.”
+
+The Streamlit client remains an optional visual follow-up:
+
+```bash
+python -m streamlit run apps/professor_demo.py
+```
 
 ## 6. Explain PatchCore — 1 minute
 

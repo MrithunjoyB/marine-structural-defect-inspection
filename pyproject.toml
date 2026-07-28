@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 structvision-analyse = "structvision.cli:main"
+structvision-professor-demo = "structvision.professor_console:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "build>=1.2"]

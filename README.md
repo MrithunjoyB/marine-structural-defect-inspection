@@ -12,13 +12,35 @@ After base installation, the CLI is available. Install the optional local demo d
 
 ```bash
 structvision-analyse --input inspection.png --method classical
+structvision-professor-demo \
+  --input inspection.png \
+  --output-dir build/professor-demo-runs/demo-run
 python -m pip install '.[demo]'
 python -m streamlit run apps/professor_demo.py
 ```
 
-The CLI and professor client analyse one image without a database or experiment-store write. Uploads are processed in memory, and exports require an explicit output option or download click. Current evidence is synthetic and development-only; real-data validation remains future work.
+The presentation-oriented console command creates an explicit
+`INPUT/PROCESSING/OUTPUT` record with measured stages, exposed anomaly evidence,
+overlay, CSV, JSON, masks, summary, console transcript, and a run hash manifest.
+It executes the frozen detector once and never installs packages or downloads
+weights. The general CLI and Streamlit client retain their existing behaviour.
+Current evidence is synthetic and development-only; real-data validation remains
+future work.
 
-Technical review: [Algorithm Specification](docs/algorithm-specification.md), [Pseudocode](docs/algorithm-pseudocode.md), [Code Guide](docs/code-structure-guide.md), [Professor Handoff](docs/professor-handoff.md), [Demonstration Runbook](docs/professor-demo-runbook.md), and [Research Evidence Summary](docs/research-evidence-summary.md).
+Technical review: [Offline Professor Console Guide](docs/professor-console-handoff.html), [Professor Block Diagram](docs/professor-console-block-diagram.html), [Algorithm Specification](docs/algorithm-specification.md), [Pseudocode](docs/algorithm-pseudocode.md), [Code Guide](docs/code-structure-guide.md), [Professor Handoff](docs/professor-handoff.md), [Demonstration Runbook](docs/professor-demo-runbook.md), and [Research Evidence Summary](docs/research-evidence-summary.md).
+
+Build a small verified drive handoff outside the repository:
+
+```bash
+python scripts/build_professor_handoff.py \
+  --output "/path/to/StructVision-AI-Professor-Handoff"
+python scripts/build_professor_handoff.py \
+  --verify "/path/to/StructVision-AI-Professor-Handoff"
+```
+
+The source ZIP is made with `git archive HEAD`; the working directory, virtual
+environment, caches, databases, learned artifacts, private data, and historical
+stores are not copied.
 
 ## Abstract
 
@@ -160,7 +182,9 @@ The repository does not currently include a complete, publication-ready interfac
 ├── registered_experiment.py, experiment_tracking.py  # execution and persistence
 ├── scientific_contract/                               # prospective v2 evaluation/provenance
 ├── src/structvision/                                  # reusable APIs, demo facade, protected adapter, v2 executors
+│   ├── professor_console.py                           # explicit offline professor console run
 │   └── normal_feature/                                 # optional official PatchCore adapter/artifacts
+├── scripts/                                            # professor launcher and verified handoff builder
 ├── development_data/                                  # protected canonical development manifest
 ├── requirements/                                      # platform-specific learned-environment lock
 ├── research_evaluation.py, research_analysis*.py     # evaluation and scientific analysis
