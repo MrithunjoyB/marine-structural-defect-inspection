@@ -41,12 +41,20 @@ demo-run/
 ├── OUTPUT/overlay.png, proposals.csv, result.json,
 │   technical-summary.txt, masks/*.png
 ├── RUN_MANIFEST.json
+├── .structvision-professor-console-owner.json
 └── CONSOLE_LOG.txt
 ```
 
-Existing directories are protected unless `--overwrite` is explicit. Persistent
-files and protected temporary artifacts stay inside the selected run directory.
-The general `structvision-analyse` CLI remains unchanged and no-write by default.
+Existing directories are never replaced merely because `--overwrite` is
+explicit. An existing-run update is allowed only when the exact directory has the
+fixed-schema ownership marker from a completed professor-console run and the
+marker, manifest, payload hashes, and complete directory contents all validate.
+The new run is fully generated in a private sibling staging directory; a
+failed analysis, serialization, validation, or installation preserves the
+previous valid run. Dangerous, symlinked, changed, unmarked, or mismatched
+targets are refused. Persistent files and protected temporary artifacts stay
+inside the selected run directory. The general `structvision-analyse` CLI
+remains unchanged and no-write by default.
 
 ## 5. Inspect the algorithm
 

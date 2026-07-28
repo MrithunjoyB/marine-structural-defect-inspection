@@ -72,6 +72,12 @@ then prints six measured stage timings, selected proposal count, generated
 relative paths, and the review-only warning. If the image has alpha, state the
 selected composite/drop policy.
 
+Prefer a new timestamped output directory for every presentation. If
+`--overwrite` is used, it can replace only the exact intact output of a previous
+completed professor-console run. The ownership marker, manifest, payload hashes,
+and directory contents are revalidated before the swap; the new run is
+completed in private sibling staging so failure preserves the prior valid run.
+
 ## 5. Inspect masks and ranked evidence — 2 minutes
 
 Open `OUTPUT/overlay.png`, `OUTPUT/proposals.csv`, `OUTPUT/result.json`, and one

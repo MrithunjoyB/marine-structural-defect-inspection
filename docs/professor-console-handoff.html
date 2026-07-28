@@ -102,7 +102,7 @@
         <h3>Processing</h3>
         <p>The stable method normalises to BGR, applies the frozen preprocessing configuration, extracts the protected feature families, generates and refines candidate masks, applies contextual scoring, and returns the frozen ranking. The command executes this detector exactly once. Timings are measured fields returned by the API, not fabricated progress values.</p>
         <h3>Output</h3>
-        <p>The run contains an overlay, tabular CSV, structured JSON, technical summary, one exact binary mask per returned proposal, exposed anomaly evidence, stage records, a console transcript, and a hash manifest. Unexposed internal stage images are explicitly labelled unavailable.</p>
+        <p>The run contains an overlay, tabular CSV, structured JSON, technical summary, one exact binary mask per returned proposal, exposed anomaly evidence, stage records, a console transcript, a hash manifest, and a fixed-schema ownership marker. Unexposed internal stage images are explicitly labelled unavailable.</p>
       </section>
 
       <section id="commands">
@@ -113,7 +113,7 @@ source venv/bin/activate
 structvision-professor-demo \
   --input "/path/to/demonstration-fixture.png" \
   --output-dir "/path/to/demo-run"</code></pre>
-        <p>For an alpha-bearing image, add <code>--alpha-handling composite_white</code>. Existing run directories are protected. Use <code>--overwrite</code> only when the exact target may be replaced.</p>
+        <p>For an alpha-bearing image, add <code>--alpha-handling composite_white</code>. Existing directories are protected. <code>--overwrite</code> can replace only the exact target of a previous completed professor-console run whose ownership marker, manifest, payload hashes, and directory contents still validate. The new run is completed in private sibling staging before installation, so analysis or serialization failure preserves the prior run. Unmarked, changed, dangerous, or symlinked targets are refused.</p>
         <h3>Prepared Mac: one-command launcher</h3>
         <pre><code>scripts/run_professor_demo.sh \
   --venv "/path/to/marine-structural-defect-inspection/venv" \
@@ -245,7 +245,7 @@ python scripts/build_professor_handoff.py \
           <tbody>
             <tr><td>Command not found</td><td>Activate the prepared project environment. The launcher does not install anything.</td></tr>
             <tr><td>Alpha policy required</td><td>Choose and record <code>drop</code>, <code>composite_black</code>, or <code>composite_white</code>.</td></tr>
-            <tr><td>Existing output directory</td><td>Choose a new timestamped directory. Use <code>--overwrite</code> only for the exact disposable target.</td></tr>
+            <tr><td>Existing output directory</td><td>Prefer a new timestamped directory. <code>--overwrite</code> works only for an intact, marker-owned output from a previous completed professor-console run; it refuses ordinary, changed, dangerous, or symlinked directories.</td></tr>
             <tr><td>Malformed, oversized, or high-bit-depth input</td><td>Use a supported valid uint8 PNG/JPEG/TIFF; do not bypass validation during the meeting.</td></tr>
             <tr><td>No proposals returned</td><td>This is a valid detector result, not an execution failure.</td></tr>
             <tr><td>Missing intermediate image</td><td>Read <code>pipeline-stages.json</code>. Unexposed stages are intentionally not fabricated.</td></tr>

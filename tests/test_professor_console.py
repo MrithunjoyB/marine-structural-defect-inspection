@@ -7,7 +7,7 @@ from hashlib import sha256
 from io import BytesIO, StringIO
 import json
 from pathlib import Path
-from tempfile import TemporaryDirectory
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -45,7 +45,9 @@ def fixture_bytes() -> bytes:
 
 class ProfessorConsoleTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(
+            dir=Path(tempfile.gettempdir()).resolve()
+        )
         self.root = Path(self.temporary.name)
         self.input = self.root / "demonstration-fixture.png"
         self.input.write_bytes(fixture_bytes())
@@ -184,6 +186,7 @@ class ProfessorConsoleTests(unittest.TestCase):
             "OUTPUT/result.json",
             "OUTPUT/technical-summary.txt",
             "RUN_MANIFEST.json",
+            professor_console.OWNERSHIP_MARKER_NAME,
             "CONSOLE_LOG.txt",
         }
         actual = {
