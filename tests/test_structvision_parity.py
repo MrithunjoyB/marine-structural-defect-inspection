@@ -11,7 +11,8 @@ from structvision.inputs import normalise_input
 from structvision.types import thaw_value
 
 
-def fixture_set():
+def generated_fixture_set():
+    """Create deterministic arrays in memory; never load dataset payloads."""
     rng = np.random.default_rng(20260722)
     base = np.clip(150 + rng.normal(0, 5, (96, 144, 3)), 0, 255).astype(np.uint8)
     fixtures = {"clean_normal_texture": (base.copy(), "BGR", None)}
@@ -88,12 +89,14 @@ def direct_legacy(normalised, config, stem):
 
 
 class FrozenBaselineParityTests(unittest.TestCase):
-    """Exact parity; accessible floats use zero absolute and relative tolerance."""
+    """Exact parity over generated arrays and temporary artifacts only."""
 
-    def test_protected_fixture_set_has_exact_direct_api_parity(self):
+    def test_generated_fixture_set_has_exact_direct_api_parity(self):
         config = DetectorConfig()
         detector = StructuralAnomalyDetector(config)
-        for name, (source, colour_space, alpha_handling) in fixture_set().items():
+        for name, (source, colour_space, alpha_handling) in (
+            generated_fixture_set().items()
+        ):
             with self.subTest(fixture=name):
                 if name == "large_controlled":
                     self.assertLess(source.nbytes, 1_000_000)

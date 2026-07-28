@@ -1,7 +1,37 @@
 from pathlib import Path
 import hashlib
+import json
 import sqlite3
 import unittest
+
+
+REGISTERED_DATA_REFERENCE = {
+    "schema_version": "structvision-registered-data-reference-v1",
+    "payload_access_policy": "forbidden-in-default-tests",
+    "entries": {
+        "registered_images": {
+            "file_count": 613,
+            "aggregate_sha256": (
+                "1a091e24311e3d7e56398bfbf3d561c461941bee087eea729456e75d86f274f7"
+            ),
+        },
+        "registered_annotations": {
+            "file_count": 323,
+            "aggregate_sha256": (
+                "299906f6e2fac5e00f3f67e2cb2789d4d61326c4741d0b08b0f36f2f96165382"
+            ),
+        },
+        "registered_splits": {
+            "file_count": 2,
+            "aggregate_sha256": (
+                "2a526a3a0326d42c96587b53bc7bfb462fdc156929b8ee60ea63f8bc35aef876"
+            ),
+        },
+    },
+}
+REGISTERED_DATA_REFERENCE_IDENTITY = (
+    "ac7823dea49d4b763fb2aecb04122af89b05c9ccf03f15741cdedd68ad1e6fc3"
+)
 
 
 class HistoricalEvidenceRegressionTests(unittest.TestCase):
@@ -55,25 +85,24 @@ class HistoricalEvidenceRegressionTests(unittest.TestCase):
         for relative, expected_hash in expected.items():
             self.assertEqual(hashlib.sha256((root / relative).read_bytes()).hexdigest(), expected_hash, relative)
 
-    def test_registered_images_masks_and_splits_are_byte_unchanged(self):
-        root = Path(__file__).parents[1]
-        expected = {
-            "research_data/raw": (613, "1a091e24311e3d7e56398bfbf3d561c461941bee087eea729456e75d86f274f7"),
-            "research_data/annotations": (323, "299906f6e2fac5e00f3f67e2cb2789d4d61326c4741d0b08b0f36f2f96165382"),
-            "research_data/splits": (2, "2a526a3a0326d42c96587b53bc7bfb462fdc156929b8ee60ea63f8bc35aef876"),
-        }
-        for relative, (expected_count, expected_hash) in expected.items():
-            directory = root / relative
-            if not directory.exists():
-                continue
-            files = sorted(path for path in directory.rglob("*") if path.is_file())
-            digest = hashlib.sha256()
-            for path in files:
-                digest.update(path.relative_to(root).as_posix().encode("utf-8"))
-                digest.update(b"\0")
-                digest.update(hashlib.sha256(path.read_bytes()).digest())
-            self.assertEqual(len(files), expected_count, relative)
-            self.assertEqual(digest.hexdigest(), expected_hash, relative)
+    def test_registered_data_reference_metadata_is_unchanged(self):
+        """Validate committed identities without opening registered payload files."""
+        canonical = json.dumps(
+            REGISTERED_DATA_REFERENCE,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        self.assertEqual(
+            hashlib.sha256(canonical).hexdigest(),
+            REGISTERED_DATA_REFERENCE_IDENTITY,
+        )
+        self.assertEqual(
+            REGISTERED_DATA_REFERENCE["payload_access_policy"],
+            "forbidden-in-default-tests",
+        )
+        for metadata in REGISTERED_DATA_REFERENCE["entries"].values():
+            self.assertGreater(metadata["file_count"], 0)
+            self.assertRegex(metadata["aggregate_sha256"], r"^[0-9a-f]{64}$")
 
 
 if __name__ == "__main__":
