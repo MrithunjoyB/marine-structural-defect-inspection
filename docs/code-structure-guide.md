@@ -38,6 +38,9 @@ The algorithms never import the client. The client imports only public names fro
 | `src/structvision/demonstration.py` | Safe in-memory decoding, method readiness, one-image orchestration, result adaptation, faithful rendering, in-memory exports | `DecodedDemonstrationImage`, `DemonstrationAnalysis`, `MethodStatus` | public detector paths, Pillow/OpenCV/NumPy | Presentation only; no detector/evaluation mathematics; no writes or network | `test_technical_demonstration.py`, `test_product_architecture.py` |
 | `src/structvision/cli.py` | `structvision-analyse`; terminal summary and explicitly requested output paths | exit-code contract | demonstration facade | No-write default; no database/API key/network | `test_live_cli.py` |
 | `src/structvision/live_console.py` | `structvision-live-demo`; one stable frozen execution and explicit INPUT/PROCESSING/OUTPUT presentation record | deterministic exit codes; run manifest | only public `structvision` facade plus standard presentation/file encoders | No detector mathematics, network, installation, model download, API key, database, or experiment call | `test_live_console.py` |
+| `src/structvision/operational_storage.py` | Shared preferred/explicit configuration discovery and root authorization | `OperationalStorageContext` | typed storage configuration | Write-free loading; only no-configuration or external mode | `test_operational_external_storage.py` |
+| `src/structvision/resources.py` | Deterministic hash-bound protected resource selection | `ProtectedResourceCatalog` | operational context, private bindings | Reads/hashes configured regular files; redacts paths publicly | `test_operational_external_storage.py` |
+| `src/structvision/protected_access.py` | Separate-root registry and immutable experiment evidence reads | `ReadOnlyRegistry`, `ProtectedExperimentStoreReader` | SQLite read-only URI, resolver, resource catalog | No mkdir/schema/write PRAGMA or mutation; protected writes refused | `test_operational_external_storage.py` |
 | `apps/structvision_demo.py` | Focused technical demonstration workflow and click-initiated downloads | Streamlit session-only result | only public `structvision` imports | Thin client; upload bytes held in memory; no implicit persistence | `test_product_architecture.py`; Streamlit smoke |
 | `scripts/build_technical_handoff.py` | Build/verify the small clean drive package and committed-source ZIP | checksum manifest; version/exclusion audit | `git archive HEAD`, live console | Refuses a dirty worktree; never recursively copies runtime content | `test_technical_handoff_builder.py` |
 | future private adapter | Private typed records and secure image/truth opening | interface specified only | external private storage + public detector | Future direction; not implemented; never Git-tracked | future contract tests after authorised pilot |
@@ -93,7 +96,11 @@ the required explicit output directory; protected legacy temporaries are
 redirected into and removed from that directory. Streamlit transfers a download
 only from an explicit download control.
 
-The legacy `app.py` remains separate and continues to own its existing upload/output/ablation/review/report writes. The technical demonstration client does not import it.
+The legacy `app.py` remains separate but is disabled before importing or
+constructing its former upload/output/registry/store paths. External
+registered-experiment execution is likewise refused before protected payload
+access or output/status mutation. The technical demonstration client does not
+import the legacy application.
 
 ## Review entry points
 

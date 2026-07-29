@@ -54,7 +54,9 @@ failed analysis, serialization, validation, or installation preserves the
 previous valid run. Dangerous, symlinked, changed, unmarked, or mismatched
 targets are refused. Persistent files and protected temporary artifacts stay
 inside the selected run directory. The general `structvision-analyse` CLI
-remains unchanged and no-write by default.
+remains no-write by default. When external storage is active, both commands
+discover the preferred configuration automatically, require path-based inputs
+under `private_data_root`, and confine explicit output beneath `runs_root`.
 
 The live ownership identities are
 `.structvision-live-console-owner.json`,
@@ -83,6 +85,8 @@ python -m streamlit run apps/structvision_demo.py
 ```
 
 Upload bytes are decoded and retained in session memory only. The client does not use the broad legacy research UI or its persistence paths.
+The root-level `app.py` is legacy and intentionally disabled before mutable
+paths or databases can be initialized.
 
 ## 7. Build and verify the clean drive handoff
 
@@ -100,6 +104,10 @@ then verifies the result. It excludes virtual environments, Git internals,
 caches, databases, historical stores, learned weights and memories, bulk
 datasets, private images, private collaborator data, absolute user-home paths, OS metadata,
 and unrelated projects.
+
+When external storage is active, the requested handoff output must be beneath
+`release_root`. This integration repair creates neither a release nor a real
+storage configuration; activation is a separate acceptance task.
 
 The drive supports four different contexts: live demonstration on the prepared
 Mac; source review from the drive; fresh installation on another machine; and a

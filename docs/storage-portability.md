@@ -2,10 +2,11 @@
 
 ## Scope and status
 
-This document defines the path-portability foundation for a future clean
-StructVision-AI installation. It does not record a completed relocation. The
-active repository, historical databases, registry manifest, learned artifacts,
-and runtime files remain where they were before this change.
+This document defines the operational path-portability boundary for the clean
+StructVision-AI installation. The supported CLI, modern Streamlit client,
+technical-handoff builder, and read-only protected-evidence readers share one
+typed operational storage context. This source repair does not create or
+activate a real local configuration.
 
 The retired whole-tree iCloud relocation procedure must not be reused. Its
 cross-FileProvider rename verifier was not a valid content-transfer design.
@@ -58,13 +59,13 @@ The configuration is local-only and must not be committed or placed in a
 public handoff. The technical-handoff verifier rejects a bundled
 `config.toml`.
 
-Schema version 1 has fixed top-level identity, migration state, all twelve
-named roots, and at most one translation rule for each immutable reference
-role:
+Schema version 2 has fixed top-level identity, migration state, all twelve
+named roots, multiple non-overlapping translation rules per immutable reference
+role, and optional private hash-bound resource bindings:
 
 ```toml
 schema = "org.structvision.storage"
-schema_version = 1
+schema_version = 2
 migration_state = "external"
 
 [roots]
@@ -81,23 +82,33 @@ artifact_cache_root = "/absolute/path/to/StructVision/Cache"
 release_root = "/absolute/path/to/StructVision/Releases"
 private_data_root = "/absolute/path/to/StructVision/PrivateData"
 
-[translations.historical_report]
+[[translations]]
+role = "historical_report"
 identity = "historical-report-prefix-v1"
 stored_prefix = "/retired/source/research_data/reports"
 target_root = "historical_report_root"
+destination_subpath = ""
 public_safe = false
 redistribution_allowed = false
 
-[translations.registry_annotation]
-identity = "registry-annotation-prefix-v1"
-stored_prefix = "/retired/source/research_data/annotations"
+[[translations]]
+role = "registry_annotation"
+identity = "registry-annotation-relative-v1"
+stored_prefix = "research_data/annotations"
 target_root = "research_data_root"
+destination_subpath = "annotations"
 public_safe = false
+redistribution_allowed = false
+
+[resources.registry_database]
+logical_root = "registry_root"
+relative_path = "datasets.sqlite"
+expected_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
 redistribution_allowed = false
 ```
 
-The example prefixes are placeholders, not active rules. A future migration
-must generate rules from its reviewed manifest and exact source prefixes.
+The example prefixes and digest are placeholders, not active bindings. Real
+activation must derive them from the reviewed immutable migration manifest.
 
 Loading rejects missing required keys, unknown keys, malformed TOML, relative
 roots, parent traversal, filesystem or mount roots, the home directory,
@@ -111,13 +122,23 @@ configuration fields. It is an identity, not an integrity or validity claim.
 Public serialization emits logical names, access types, and the identity while
 redacting every absolute path and omitting the private-data root entry.
 Credentials and arbitrary extension fields are not accepted by this schema.
+Resource bindings are local-only mappings from a fixed role to a contained
+relative path and expected SHA-256. Duplicate roles, missing required roles,
+hash mismatches, paths outside the role root, and redistribution grants are
+refused.
 
 ## Migration states
 
-`external` is required for new portable operations. A configured CLI output
-must be inside `runs_root`; learned artifacts must be inside
-`learned_artifact_root`, and an environment lock must be inside `source_root`.
-The ordinary CLI remains no-write-by-default.
+`external` is required for new portable operations. `structvision-live-demo`
+and `structvision-analyse` discover the preferred configuration automatically;
+an explicit `--storage-config` overrides it. Filesystem inputs must be inside
+`private_data_root`, console/CLI outputs inside `runs_root`, handoff outputs
+inside `release_root`, and learned resources inside `learned_artifact_root`.
+The environment lock is a protected learned/runtime resource, not source.
+External-mode command-line and environment selections must also match the
+role-specific resource binding and its expected SHA-256; being merely inside
+the learned-artifact root is insufficient.
+`structvision-analyse` remains no-write-by-default.
 
 `legacy_repository_compatibility` is available only through the explicitly
 named `StorageConfig.legacy_repository_compatibility(...)` constructor.
@@ -126,13 +147,13 @@ paths reject it, and a repository-local write additionally requires
 `allow_legacy_write=True` at the exact call site. This state exists only while
 the staged migration is incomplete.
 
-The legacy Streamlit client retains its historical behavior when no portable
-configuration is selected. When `STRUCTVISION_STORAGE_CONFIG` explicitly
-selects an external configuration, new uploaded bytes go beneath
-`runs_root/legacy-streamlit/uploads` instead of the repository. Other legacy UI
-artifact paths remain compatibility-only until their protected path-global
-dependencies can be replaced in a separately reviewed change. The technical
-Streamlit demonstration remains in-memory and write-free.
+The supported local inspection interface is
+`apps/structvision_demo.py`. Uploads remain in memory and browser downloads
+remain explicit. The root-level `app.py` is a disabled legacy research
+interface: it stops before importing any mutable registry, store, upload,
+output, report, dataset, mask, or model path. The legacy registered-experiment
+executor is also refused before payload access or status/output mutation when
+external mode is selected.
 
 The protected root-level `config.py` is deliberately unchanged. It contains
 frozen classical identities and legacy path globals used by the compatibility
@@ -152,17 +173,22 @@ payload and never updates a database or JSON manifest.
 
 Resolution is fail-closed:
 
-1. Refuse empty, relative, malformed, traversal-bearing, or unexpected-prefix
+1. Refuse empty, malformed, traversal-bearing, ambiguous, or unexpected-prefix
    values.
-2. If the path is an existing regular file inside the current role root or its
-   exact configured historical prefix, return `direct`.
-3. If the exact configured old prefix matches, retain the relative suffix and
-   place it beneath that role's fixed target root.
+2. Permit absolute or repository-relative stored prefixes through separate,
+   stable rules.
+3. Retain the matched suffix and place it beneath the rule's fixed target root
+   and explicit destination subpath.
 4. Return `translated` only if that physical regular file exists and no path
    component is a symlink.
 5. Return `unavailable` when an approved direct or translated target is absent.
-6. Return `refused` for wrong-role prefixes, symlink escape, directories, or
-   any unapproved absolute location.
+6. Return `refused` for overlapping/wrong-role prefixes, symlink escape,
+   directories, or any unapproved location.
+
+In external mode, a matched legacy reference is always translated to the
+external target even while an old rollback file still exists. Existing legacy
+direct behavior is available only in explicit
+`legacy_repository_compatibility` mode.
 
 Historical reports can translate only to `historical_report_root`; registry
 annotations can translate only to `research_data_root`. There is no
@@ -178,10 +204,18 @@ performance.
 
 ## Database and manifest immutability
 
-The 168 historical visualization strings, 33 registry annotation strings, and
-the same 33 JSON-manifest strings remain unchanged. Compatibility is achieved
-at the read boundary, not through a database migration. No resolver API
-contains an update, insert, delete, commit, or write-back operation.
+All 888 historical visualization strings (168 absolute and 720 relative) and
+all 323 non-empty registry annotation strings (33 absolute and 290 relative)
+remain unchanged. Compatibility is achieved at the read boundary, not through
+a database migration.
+
+`ReadOnlyRegistry` keeps `registry_root` and `research_data_root` separate and
+opens the registry with SQLite `mode=ro&immutable=1`. It performs no directory
+creation, schema initialization, migration, or write statement.
+`ProtectedExperimentStoreReader` provides hash-verified read-only access to the
+historical, research-evaluation, PatchCore, and hybrid stores. External
+registered-experiment execution remains intentionally disabled pending a
+future API-based benchmark runner.
 
 Applications adopting the resolver must retain the stored value as provenance
 and use the returned path only for the explicitly authorized read. Dataset
@@ -212,8 +246,8 @@ workspace now:
 5. Install a fresh virtual environment. A moved virtual environment must not be
    reused because launcher shebangs and environment metadata contain the old
    location.
-6. Write the local configuration atomically outside Git and add exact
-   role-specific legacy translation rules.
+6. In a separate activation task, write the local configuration atomically
+   outside Git with exact role-specific translations and hash-bound resources.
 7. Run metadata-only resolution and full regression checks before enabling any
    write workflow.
 8. Retain rollback inputs until the new installation and protected stores are

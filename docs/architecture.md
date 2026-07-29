@@ -12,7 +12,10 @@ src/structvision/
 ├── classical.py      protected legacy compatibility adapter
 ├── executor.py       prospective ExperimentSpecificationV2 executor
 ├── provenance.py     source/runtime provenance records
-├── storage.py        validated named external roots and migration state
+├── storage.py        named roots, translations, private resource bindings
+├── operational_storage.py shared no-config/external operational context
+├── resources.py      hash-verified protected-resource discovery
+├── protected_access.py immutable registry and experiment-store readers
 ├── legacy_paths.py   read-only role-scoped immutable-path translation
 ├── sinks.py          explicit artifact/result sink boundaries
 └── errors.py         typed fail-closed exceptions
@@ -59,7 +62,14 @@ Deterministic generated fixtures cover clean texture, thin crack, pitting, weld 
 
 ## Package And UI Boundaries
 
-The existing Streamlit UI remains a legacy compatibility client. It continues to own feature-map persistence, ablation CSV output, manual review, reports, exports, optional YOLO integration, and historical registered-experiment controls. Those paths are not dependencies of the reusable package. When an external storage configuration is explicitly selected, new legacy-client uploads are placed under the configured `runs_root`; without that opt-in, its historical behavior remains unchanged. The technical Streamlit client remains in-memory and write-free. See [Portable Storage and Immutable Legacy Paths](storage-portability.md).
+The supported Streamlit interface is `apps/structvision_demo.py`. It consumes
+the public operational storage context, retains upload bytes in memory, and
+offers exports only through explicit browser controls. The old root-level
+`app.py` is a disabled legacy research interface and stops before importing any
+mutable path or store. Its mutable monolithic workflow is not an external
+storage consumer. External protected evidence is available only through the
+read-only readers; the legacy registered-experiment executor is refused in
+external mode. See [Portable Storage and Immutable Legacy Paths](storage-portability.md).
 
 ## Normal-Feature Isolation Boundary
 

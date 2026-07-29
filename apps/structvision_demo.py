@@ -12,6 +12,8 @@ from structvision import (
     HYBRID_METHOD,
     METHOD_STATUSES,
     PATCHCORE_METHOD,
+    OperationalStorageContext,
+    StorageConfigurationError,
     LearnedEnvironmentUnavailableError,
     LearnedRuntimePaths,
     analyse_demonstration_image,
@@ -244,7 +246,16 @@ def _analysis_workspace(analysis) -> None:
 
 
 def main() -> None:
-    runtime = LearnedRuntimePaths.from_environment()
+    try:
+        storage_context = OperationalStorageContext.discover()
+        runtime = LearnedRuntimePaths.from_environment(storage_context)
+    except StorageConfigurationError:
+        st.title("StructVision-AI")
+        st.error(
+            "External storage configuration is missing, malformed, or unsafe. "
+            "No analysis or protected-resource access was attempted."
+        )
+        return
     st.title("StructVision-AI")
     st.caption("Live inspection console and technical-validation interface")
     st.info(

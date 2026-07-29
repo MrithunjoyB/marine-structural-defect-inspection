@@ -2,6 +2,21 @@
 
 from __future__ import annotations
 
+
+LEGACY_INTERFACE_MESSAGE = (
+    "The root-level StructVision research interface is legacy and disabled for "
+    "operational use. Start the supported interface with: "
+    "streamlit run apps/structvision_demo.py"
+)
+
+
+class LegacyInterfaceDisabledError(RuntimeError):
+    """The obsolete mutable research UI was invoked."""
+
+
+raise LegacyInterfaceDisabledError(LEGACY_INTERFACE_MESSAGE)
+
+
 from datetime import datetime
 import os
 from pathlib import Path

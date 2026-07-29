@@ -27,6 +27,8 @@ from .storage import (
     LogicalRoot,
     MigrationState,
     PathIntent,
+    ResourceBinding,
+    ResourceRole,
     RootAccess,
     StorageConfig,
     StorageConfigurationError,
@@ -38,6 +40,13 @@ from .storage import (
     preferred_config_path,
 )
 from .legacy_paths import LegacyPathResolver, PathResolution, ResolutionStatus
+from .operational_storage import OperationalStorageContext, OperationalStorageMode
+from .protected_access import (
+    ProtectedExperimentStoreReader,
+    ProtectedWriteRefusedError,
+    ReadOnlyRegistry,
+)
+from .resources import ProtectedResource, ProtectedResourceCatalog
 from .demonstration import (
     CLASSICAL_METHOD,
     DEFAULT_METHOD,
@@ -104,6 +113,8 @@ __all__ = [
     "PathIntent",
     "PathResolution",
     "ResolutionStatus",
+    "ResourceBinding",
+    "ResourceRole",
     "RootAccess",
     "StorageConfig",
     "StorageConfigurationError",
@@ -113,6 +124,13 @@ __all__ = [
     "load_external_storage_config",
     "load_storage_config",
     "preferred_config_path",
+    "OperationalStorageContext",
+    "OperationalStorageMode",
+    "ProtectedExperimentStoreReader",
+    "ProtectedResource",
+    "ProtectedResourceCatalog",
+    "ProtectedWriteRefusedError",
+    "ReadOnlyRegistry",
     "CLASSICAL_METHOD",
     "DEFAULT_METHOD",
     "EVIDENCE_ROWS",

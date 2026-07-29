@@ -28,6 +28,8 @@ from PIL import Image, PngImagePlugin
 from structvision import (
     CLASSICAL_METHOD,
     DemonstrationInputError,
+    OperationalStorageContext,
+    StorageConfigurationError,
     analyse_demonstration_image,
     analysis_json_bytes,
     annotated_png_bytes,
@@ -50,6 +52,7 @@ EXIT_OUTPUT_EXISTS = 4
 EXIT_EXECUTION = 5
 EXIT_OUTPUT = 6
 EXIT_UNSAFE_TARGET = 7
+EXIT_STORAGE_CONFIGURATION = 8
 
 SCORE_WARNING = (
     "Review proposals only — not confirmed defects or engineering diagnosis."
@@ -119,6 +122,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--overwrite",
         action="store_true",
         help="Replace this exact existing run directory after successful analysis",
+    )
+    parser.add_argument(
+        "--storage-config",
+        type=Path,
+        help=(
+            "optional external-storage configuration override; otherwise the "
+            "preferred local configuration is discovered automatically"
+        ),
     )
     return parser
 
@@ -1019,19 +1030,36 @@ def _write_run(
 def main(argv: list[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     status = method_status(CLASSICAL_METHOD)
-    input_name = arguments.input.name
     staging: Path | None = None
     target: Path | None = None
     try:
-        encoded = arguments.input.read_bytes()
+        storage_context = OperationalStorageContext.discover(
+            arguments.storage_config
+        )
+        input_path = (
+            storage_context.authorise_private_input(arguments.input).path
+            if storage_context.is_external
+            else arguments.input
+        )
+        output_path = (
+            storage_context.authorise_run_output(arguments.output_dir).path
+            if storage_context.is_external
+            else arguments.output_dir
+        )
+    except StorageConfigurationError as error:
+        print(f"Storage configuration error: {error}", file=sys.stderr)
+        return EXIT_STORAGE_CONFIGURATION
+    input_name = input_path.name
+    try:
+        encoded = input_path.read_bytes()
         decoded = decode_image_bytes(
             encoded,
             filename=input_name,
             alpha_handling=arguments.alpha_handling,
         )
         target, previous = _prepare_target(
-            raw_target=arguments.output_dir,
-            input_path=arguments.input,
+            raw_target=output_path,
+            input_path=input_path,
             overwrite=arguments.overwrite,
         )
     except FileExistsError as error:
@@ -1099,8 +1127,8 @@ def main(argv: list[str] | None = None) -> int:
         _install_staged_run(
             staging=staging,
             target=target,
-            raw_target=arguments.output_dir,
-            input_path=arguments.input,
+            raw_target=output_path,
+            input_path=input_path,
             previous=previous,
         )
     except UnsafeOutputTargetError as error:

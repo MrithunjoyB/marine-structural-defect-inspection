@@ -12,6 +12,7 @@ from .storage import (
     LegacyReferenceRole,
     LegacyTranslationRule,
     LogicalRoot,
+    MigrationState,
     StorageConfig,
     StorageConfigurationError,
 )
@@ -83,12 +84,12 @@ def _unsafe_raw_path(value: str) -> str | None:
         return "stored path contains a NUL byte"
     if any(part == ".." for part in value.replace("\\", "/").split("/")):
         return "stored path contains '..' traversal"
-    if not Path(value).is_absolute():
-        return "stored path must be absolute"
     return None
 
 
 def _symlink_component(path: Path) -> Path | None:
+    if not path.is_absolute():
+        return None
     cursor = Path(path.anchor)
     for part in path.parts[1:]:
         cursor = cursor / part
@@ -98,6 +99,12 @@ def _symlink_component(path: Path) -> Path | None:
         except OSError:
             return cursor
     return None
+
+
+def _matches_rule(raw: Path, rule: LegacyTranslationRule) -> bool:
+    if raw.is_absolute() != rule.stored_prefix.is_absolute():
+        return False
+    return _is_relative_to(raw, rule.stored_prefix)
 
 
 class LegacyPathResolver:
@@ -153,7 +160,6 @@ class LegacyPathResolver:
         stored = os.fspath(stored_path)
         if not isinstance(stored, str):
             stored = str(stored)
-        rule = self.configuration.rule(selected_role)
         issue = _unsafe_raw_path(stored)
         if issue is not None:
             return self._result(
@@ -161,7 +167,7 @@ class LegacyPathResolver:
                 role=selected_role,
                 status=ResolutionStatus.REFUSED,
                 resolved=None,
-                rule=rule,
+                rule=None,
                 reason=issue,
             )
 
@@ -172,37 +178,104 @@ class LegacyPathResolver:
                 LegacyReferenceRole.REGISTRY_ANNOTATION: LogicalRoot.RESEARCH_DATA,
             }[selected_role]
         )
-        permitted_direct_roots = [target_root]
-        if rule is not None:
-            permitted_direct_roots.append(rule.stored_prefix)
-
-        matching_other = next(
-            (
-                candidate
-                for candidate in self.configuration.translation_rules
-                if candidate.role is not selected_role
-                and _is_relative_to(raw, candidate.stored_prefix)
-            ),
-            None,
+        selected_matches = tuple(
+            candidate
+            for candidate in self.configuration.translation_rules
+            if candidate.role is selected_role and _matches_rule(raw, candidate)
         )
-        if matching_other is not None:
+        other_matches = tuple(
+            candidate
+            for candidate in self.configuration.translation_rules
+            if candidate.role is not selected_role and _matches_rule(raw, candidate)
+        )
+        if other_matches:
+            matching_other = other_matches[0]
             return self._result(
                 stored=stored,
                 role=selected_role,
                 status=ResolutionStatus.REFUSED,
                 resolved=None,
-                rule=rule,
+                rule=selected_matches[0] if selected_matches else None,
                 reason=(
                     f"stored path belongs to {matching_other.role.value}, not "
                     f"{selected_role.value}"
                 ),
             )
+        if len(selected_matches) > 1:
+            return self._result(
+                stored=stored,
+                role=selected_role,
+                status=ResolutionStatus.REFUSED,
+                resolved=None,
+                rule=None,
+                reason="stored path matches multiple translation rules",
+            )
 
-        direct_root = next(
-            (prefix for prefix in permitted_direct_roots if _is_relative_to(raw, prefix)),
-            None,
-        )
-        if direct_root is not None:
+        if raw.is_absolute() and _is_relative_to(raw, target_root):
+            link = _symlink_component(raw)
+            if link is not None:
+                return self._result(
+                    stored=stored,
+                    role=selected_role,
+                    status=ResolutionStatus.REFUSED,
+                    resolved=None,
+                    rule=None,
+                    reason=f"path traverses a symlink: {link}",
+                )
+            if not raw.exists():
+                return self._result(
+                    stored=stored,
+                    role=selected_role,
+                    status=ResolutionStatus.UNAVAILABLE,
+                    resolved=raw,
+                    rule=None,
+                    reason="configured direct target is not available",
+                )
+            resolved = raw.resolve(strict=False)
+            if not _is_relative_to(resolved, target_root):
+                return self._result(
+                    stored=stored,
+                    role=selected_role,
+                    status=ResolutionStatus.REFUSED,
+                    resolved=None,
+                    rule=None,
+                    reason="resolved path escapes its approved direct prefix",
+                )
+            if not raw.is_file():
+                return self._result(
+                    stored=stored,
+                    role=selected_role,
+                    status=ResolutionStatus.REFUSED,
+                    resolved=None,
+                    rule=None,
+                    reason="resolved reference is not a regular file",
+                )
+            return self._result(
+                stored=stored,
+                role=selected_role,
+                status=ResolutionStatus.DIRECT,
+                resolved=resolved,
+                rule=None,
+                reason="existing regular file is inside an approved role-specific prefix",
+            )
+
+        if not selected_matches:
+            return self._result(
+                stored=stored,
+                role=selected_role,
+                status=ResolutionStatus.REFUSED,
+                resolved=None,
+                rule=None,
+                reason="stored prefix is not approved for this role",
+            )
+
+        rule = selected_matches[0]
+        if (
+            self.configuration.migration_state
+            is MigrationState.LEGACY_REPOSITORY_COMPATIBILITY
+            and raw.is_absolute()
+            and raw.exists()
+        ):
             link = _symlink_component(raw)
             if link is not None:
                 return self._result(
@@ -212,26 +285,6 @@ class LegacyPathResolver:
                     resolved=None,
                     rule=rule,
                     reason=f"path traverses a symlink: {link}",
-                )
-        if raw.exists():
-            if direct_root is None:
-                return self._result(
-                    stored=stored,
-                    role=selected_role,
-                    status=ResolutionStatus.REFUSED,
-                    resolved=None,
-                    rule=rule,
-                    reason="existing path is outside every approved prefix for this role",
-                )
-            resolved = raw.resolve(strict=False)
-            if not _is_relative_to(resolved, direct_root):
-                return self._result(
-                    stored=stored,
-                    role=selected_role,
-                    status=ResolutionStatus.REFUSED,
-                    resolved=None,
-                    rule=rule,
-                    reason="resolved path escapes its approved direct prefix",
                 )
             if not raw.is_file():
                 return self._result(
@@ -246,35 +299,16 @@ class LegacyPathResolver:
                 stored=stored,
                 role=selected_role,
                 status=ResolutionStatus.DIRECT,
-                resolved=resolved,
-                rule=rule if direct_root == getattr(rule, "stored_prefix", None) else None,
-                reason="existing regular file is inside an approved role-specific prefix",
-            )
-
-        if _is_relative_to(raw, target_root):
-            return self._result(
-                stored=stored,
-                role=selected_role,
-                status=ResolutionStatus.UNAVAILABLE,
-                resolved=raw,
-                rule=None,
-                reason="configured direct target is not available",
-            )
-        if rule is None or not _is_relative_to(raw, rule.stored_prefix):
-            return self._result(
-                stored=stored,
-                role=selected_role,
-                status=ResolutionStatus.REFUSED,
-                resolved=None,
+                resolved=raw.resolve(strict=False),
                 rule=rule,
-                reason="stored absolute prefix is not approved for this role",
+                reason="explicit legacy compatibility selected an existing legacy file",
             )
 
         suffix = raw.relative_to(rule.stored_prefix)
         try:
             configured: ConfiguredPath = self.configuration.configured_path(
                 rule.target_root,
-                suffix,
+                rule.destination_subpath / suffix,
             )
         except StorageConfigurationError as error:
             return self._result(

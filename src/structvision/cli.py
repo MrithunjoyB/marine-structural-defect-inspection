@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 import sys
 
@@ -26,14 +25,9 @@ from .demonstration import (
     proposal_csv_bytes,
     technical_summary_bytes,
 )
-from .storage import (
-    CONFIG_ENVIRONMENT_VARIABLE,
-    LogicalRoot,
-    PathIntent,
-    StorageConfig,
-    StorageConfigurationError,
-    load_storage_config,
-)
+from .operational_storage import OperationalStorageContext
+from .resources import ProtectedResourceCatalog
+from .storage import ResourceRole, StorageConfigurationError
 
 
 EXIT_SUCCESS = 0
@@ -93,42 +87,40 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _runtime(
     arguments: argparse.Namespace,
-    storage: StorageConfig | None = None,
+    storage_context: OperationalStorageContext,
 ) -> LearnedRuntimePaths:
-    environment = LearnedRuntimePaths.from_environment()
-    runtime = LearnedRuntimePaths(
-        environment_lock=arguments.environment_lock or environment.environment_lock,
-        weight=arguments.weight or environment.weight,
-        patchcore_model=arguments.patchcore_model or environment.patchcore_model,
-        patchcore_calibration=arguments.patchcore_calibration or environment.patchcore_calibration,
-        hybrid_model=arguments.hybrid_model or environment.hybrid_model,
-        hybrid_fusion=arguments.hybrid_fusion or environment.hybrid_fusion,
-    )
-    if storage is None:
-        return runtime
-    storage.require_external()
+    if not storage_context.is_external:
+        return LearnedRuntimePaths()
+    environment = LearnedRuntimePaths.from_environment(storage_context)
+    catalog = ProtectedResourceCatalog(storage_context)
     roles = {
-        "environment_lock": LogicalRoot.SOURCE,
-        "weight": LogicalRoot.LEARNED_ARTIFACT,
-        "patchcore_model": LogicalRoot.LEARNED_ARTIFACT,
-        "patchcore_calibration": LogicalRoot.LEARNED_ARTIFACT,
-        "hybrid_model": LogicalRoot.LEARNED_ARTIFACT,
-        "hybrid_fusion": LogicalRoot.LEARNED_ARTIFACT,
+        "environment_lock": ResourceRole.LEARNED_ENVIRONMENT_LOCK,
+        "weight": ResourceRole.OFFICIAL_WEIGHT,
+        "patchcore_model": ResourceRole.PATCHCORE_MODEL,
+        "patchcore_calibration": ResourceRole.PATCHCORE_CALIBRATION,
+        "hybrid_model": ResourceRole.HYBRID_MODEL,
+        "hybrid_fusion": ResourceRole.HYBRID_FUSION,
     }
-    for field, root in roles.items():
-        selected = getattr(runtime, field)
-        if selected is not None:
-            storage.authorise_path(root, selected, intent=PathIntent.READ)
+    selected: dict[str, Path | None] = {}
+    for field, role in roles.items():
+        argument = getattr(arguments, field)
+        if argument is None:
+            selected[field] = getattr(environment, field)
+        else:
+            selected[field] = catalog.resolve_selected(role, argument).path
+    runtime = LearnedRuntimePaths(
+        **selected,
+    )
     return runtime
 
 
 def _write_explicit(
     path: Path,
     payload: bytes,
-    storage: StorageConfig | None = None,
+    storage_context: OperationalStorageContext,
 ) -> None:
-    if storage is not None:
-        storage.authorise_path(LogicalRoot.RUNS, path, intent=PathIntent.WRITE)
+    if storage_context.is_external:
+        storage_context.authorise_run_output(path)
     if not path.parent.is_dir():
         raise OSError(f"Output parent directory does not exist: {path.parent}")
     path.write_bytes(payload)
@@ -138,23 +130,23 @@ def main(argv: list[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     method_id = METHOD_ALIASES[arguments.method]
     try:
-        storage = None
-        if (
-            arguments.storage_config is not None
-            or os.environ.get(CONFIG_ENVIRONMENT_VARIABLE)
-        ):
-            storage = load_storage_config(arguments.storage_config, required=True)
-        if storage is not None:
-            storage.require_external()
+        storage_context = OperationalStorageContext.discover(
+            arguments.storage_config
+        )
+        input_path = (
+            storage_context.authorise_private_input(arguments.input).path
+            if storage_context.is_external
+            else arguments.input
+        )
     except StorageConfigurationError as error:
         print(f"Storage configuration error: {error}", file=sys.stderr)
         return EXIT_STORAGE_CONFIGURATION
     try:
-        runtime = _runtime(arguments, storage)
-        encoded = arguments.input.read_bytes()
+        runtime = _runtime(arguments, storage_context)
+        encoded = input_path.read_bytes()
         decoded = decode_image_bytes(
             encoded,
-            filename=arguments.input.name,
+            filename=input_path.name,
             alpha_handling=arguments.alpha_handling,
         )
         analysis = analyse_demonstration_image(
@@ -180,20 +172,32 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if arguments.json_out is not None:
-            _write_explicit(arguments.json_out, analysis_json_bytes(analysis), storage)
+            _write_explicit(
+                arguments.json_out,
+                analysis_json_bytes(analysis),
+                storage_context,
+            )
         if arguments.csv_out is not None:
-            _write_explicit(arguments.csv_out, proposal_csv_bytes(analysis), storage)
+            _write_explicit(
+                arguments.csv_out,
+                proposal_csv_bytes(analysis),
+                storage_context,
+            )
         if arguments.overlay_out is not None:
-            _write_explicit(arguments.overlay_out, annotated_png_bytes(analysis), storage)
+            _write_explicit(
+                arguments.overlay_out,
+                annotated_png_bytes(analysis),
+                storage_context,
+            )
         if arguments.summary_out is not None:
-            _write_explicit(arguments.summary_out, technical_summary_bytes(analysis), storage)
+            _write_explicit(
+                arguments.summary_out,
+                technical_summary_bytes(analysis),
+                storage_context,
+            )
         if arguments.mask_out_dir is not None:
-            if storage is not None:
-                storage.authorise_path(
-                    LogicalRoot.RUNS,
-                    arguments.mask_out_dir,
-                    intent=PathIntent.WRITE,
-                )
+            if storage_context.is_external:
+                storage_context.authorise_run_output(arguments.mask_out_dir)
             if not arguments.mask_out_dir.is_dir():
                 raise OSError(
                     f"Mask output directory does not exist: {arguments.mask_out_dir}"
@@ -204,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
                     _write_explicit(
                         target,
                         binary_mask_png_bytes(analysis, str(row["proposal_id"])),
-                        storage,
+                        storage_context,
                     )
     except (OSError, StorageConfigurationError) as error:
         print(f"Output error: {error}", file=sys.stderr)

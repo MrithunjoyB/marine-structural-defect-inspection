@@ -20,6 +20,8 @@ from structvision.storage import (
     LogicalRoot,
     MigrationState,
     PathIntent,
+    ResourceBinding,
+    ResourceRole,
     StorageConfig,
     StorageConfigurationError,
     StorageConfigurationMissingError,
@@ -399,7 +401,8 @@ class StorageIntegrationTests(unittest.TestCase):
         )
         self.assertIn('"--output-dir"', source)
         self.assertIn("required=True", source)
-        self.assertNotIn("load_storage_config", source)
+        self.assertIn('"--storage-config"', source)
+        self.assertIn("OperationalStorageContext.discover", source)
 
     def test_handoff_policy_excludes_local_configuration(self):
         from scripts import build_technical_handoff as builder
@@ -409,12 +412,12 @@ class StorageIntegrationTests(unittest.TestCase):
             builder._is_prohibited(builder.PurePosixPath("config.toml"))
         )
 
-    def test_legacy_streamlit_upload_switch_is_explicit(self):
+    def test_legacy_streamlit_is_disabled_before_mutable_imports(self):
         source = (ROOT / "app.py").read_text(encoding="utf-8")
-        self.assertIn("CONFIG_ENVIRONMENT_VARIABLE", source)
-        self.assertIn("LogicalRoot.RUNS", source)
-        self.assertIn("legacy-streamlit/uploads", source)
-        self.assertIn("load_external_storage_config", source)
+        guard = source.index("raise LegacyInterfaceDisabledError")
+        self.assertLess(guard, source.index("from config import"))
+        self.assertLess(guard, source.index("from dataset_intake import"))
+        self.assertIn("apps/structvision_demo.py", source[:guard])
 
     def test_cli_external_config_accepts_only_runs_root_outputs(self):
         with TemporaryDirectory() as temporary:
@@ -422,7 +425,9 @@ class StorageIntegrationTests(unittest.TestCase):
             runs = fixture.config.root(LogicalRoot.RUNS)
             runs.mkdir(parents=True)
             config_path = fixture.write_config()
-            image_path = fixture.root / "fixture.png"
+            private_data = fixture.config.root(LogicalRoot.PRIVATE_DATA)
+            private_data.mkdir(parents=True)
+            image_path = private_data / "fixture.png"
             yy, xx = np.indices((96, 128))
             image = np.clip(
                 120 + 20 * np.sin(xx / 8.0) + 12 * np.cos(yy / 9.0),
@@ -514,10 +519,27 @@ class StorageIntegrationTests(unittest.TestCase):
 
         with TemporaryDirectory() as temporary:
             fixture = StorageFixture(Path(temporary))
-            config_path = fixture.write_config()
             learned = (
                 fixture.config.root(LogicalRoot.LEARNED_ARTIFACT) / "model.json"
             )
+            learned.parent.mkdir(parents=True)
+            learned.write_bytes(b"bound learned model metadata")
+            configured = StorageConfig.proposed_external(
+                source_root=fixture.source,
+                external_base=fixture.external,
+                resource_bindings=(
+                    ResourceBinding(
+                        ResourceRole.PATCHCORE_MODEL,
+                        LogicalRoot.LEARNED_ARTIFACT,
+                        learned.relative_to(
+                            fixture.config.root(LogicalRoot.LEARNED_ARTIFACT)
+                        ),
+                        sha256(learned.read_bytes()).hexdigest(),
+                    ),
+                ),
+            )
+            config_path = fixture.root / "config.toml"
+            config_path.write_text(configured.to_toml(), encoding="utf-8")
             outside = fixture.root / "outside-model.json"
             with patch.dict(
                 os.environ,

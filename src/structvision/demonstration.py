@@ -38,11 +38,11 @@ from .hybrid.artifact import (
 )
 from .types import thaw_value
 from .storage import (
-    CONFIG_ENVIRONMENT_VARIABLE,
-    LogicalRoot,
-    PathIntent,
-    load_external_storage_config,
+    ResourceRole,
+    StorageConfigurationError,
 )
+from .operational_storage import OperationalStorageContext
+from .resources import ProtectedResourceCatalog
 
 
 CLASSICAL_METHOD = "structvision-classical-baseline-v1-frozen"
@@ -214,51 +214,59 @@ class LearnedRuntimePaths:
     hybrid_fusion: Path | None = None
 
     @classmethod
-    def from_environment(cls) -> "LearnedRuntimePaths":
-        selected_config = os.environ.get(CONFIG_ENVIRONMENT_VARIABLE)
-        storage = (
-            load_external_storage_config(Path(selected_config).expanduser())
-            if selected_config
-            else None
-        )
+    def from_environment(
+        cls,
+        storage_context: OperationalStorageContext | None = None,
+    ) -> "LearnedRuntimePaths":
+        """Discover only root-authorised external resources for operational use."""
 
-        def selected(name: str, root: LogicalRoot) -> Path | None:
-            value = os.environ.get(name)
-            if not value:
-                return None
-            path = Path(value).expanduser()
-            if storage is not None:
-                return storage.authorise_path(
-                    root,
-                    path,
-                    intent=PathIntent.READ,
-                ).path
-            return path
-
-        return cls(
-            environment_lock=selected(
-                "STRUCTVISION_ENVIRONMENT_LOCK", LogicalRoot.SOURCE
+        context = storage_context or OperationalStorageContext.discover()
+        if not context.is_external:
+            return cls()
+        catalog = ProtectedResourceCatalog(context)
+        fields = {
+            "environment_lock": (
+                "STRUCTVISION_ENVIRONMENT_LOCK",
+                ResourceRole.LEARNED_ENVIRONMENT_LOCK,
             ),
-            weight=selected(
-                "STRUCTVISION_PATCHCORE_WEIGHT", LogicalRoot.LEARNED_ARTIFACT
+            "weight": (
+                "STRUCTVISION_PATCHCORE_WEIGHT",
+                ResourceRole.OFFICIAL_WEIGHT,
             ),
-            patchcore_model=selected(
+            "patchcore_model": (
                 "STRUCTVISION_PATCHCORE_MODEL_ARTIFACT",
-                LogicalRoot.LEARNED_ARTIFACT,
+                ResourceRole.PATCHCORE_MODEL,
             ),
-            patchcore_calibration=selected(
+            "patchcore_calibration": (
                 "STRUCTVISION_PATCHCORE_CALIBRATION_ARTIFACT",
-                LogicalRoot.LEARNED_ARTIFACT,
+                ResourceRole.PATCHCORE_CALIBRATION,
             ),
-            hybrid_model=selected(
+            "hybrid_model": (
                 "STRUCTVISION_HYBRID_MODEL_ARTIFACT",
-                LogicalRoot.LEARNED_ARTIFACT,
+                ResourceRole.HYBRID_MODEL,
             ),
-            hybrid_fusion=selected(
+            "hybrid_fusion": (
                 "STRUCTVISION_HYBRID_FUSION_ARTIFACT",
-                LogicalRoot.LEARNED_ARTIFACT,
+                ResourceRole.HYBRID_FUSION,
             ),
-        )
+        }
+        selected: dict[str, Path | None] = {}
+        for field, (environment_name, role) in fields.items():
+            environment_value = os.environ.get(environment_name)
+            if environment_value:
+                selected[field] = catalog.resolve_selected(
+                    role,
+                    Path(environment_value).expanduser(),
+                ).path
+                continue
+            resource = catalog.resolve_optional(role)
+            selected[field] = None if resource is None else resource.path
+        try:
+            return cls(**selected)
+        except TypeError as error:  # pragma: no cover - fixed mapping above
+            raise StorageConfigurationError(
+                "Learned resource discovery produced an invalid runtime mapping"
+            ) from error
 
 
 @dataclass(frozen=True)

@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover - exercised by the supported Python 3.9 
 
 
 CONFIG_SCHEMA = "org.structvision.storage"
-CONFIG_SCHEMA_VERSION = 1
+CONFIG_SCHEMA_VERSION = 2
 DEFAULT_EXTERNAL_DIRECTORY = "StructVision"
 CONFIG_ENVIRONMENT_VARIABLE = "STRUCTVISION_STORAGE_CONFIG"
 
@@ -71,6 +71,23 @@ class LegacyReferenceRole(str, Enum):
     REGISTRY_ANNOTATION = "registry_annotation"
 
 
+class ResourceRole(str, Enum):
+    """Private, hash-bound protected resources used by operational readers."""
+
+    REGISTRY_DATABASE = "registry_database"
+    REGISTRY_MANIFEST = "registry_manifest"
+    HISTORICAL_STORE = "historical_store"
+    RESEARCH_EVALUATION_STORE = "research_evaluation_store"
+    PATCHCORE_STORE = "patchcore_store"
+    HYBRID_STORE = "hybrid_store"
+    LEARNED_ENVIRONMENT_LOCK = "learned_environment_lock"
+    OFFICIAL_WEIGHT = "official_weight"
+    PATCHCORE_MODEL = "patchcore_model"
+    PATCHCORE_CALIBRATION = "patchcore_calibration"
+    HYBRID_MODEL = "hybrid_model"
+    HYBRID_FUSION = "hybrid_fusion"
+
+
 ROOT_ACCESS: Mapping[LogicalRoot, RootAccess] = {
     LogicalRoot.SOURCE: RootAccess.READ_ONLY,
     LogicalRoot.RUNS: RootAccess.WRITABLE,
@@ -91,6 +108,21 @@ ROLE_TARGET_ROOT: Mapping[LegacyReferenceRole, LogicalRoot] = {
     LegacyReferenceRole.REGISTRY_ANNOTATION: LogicalRoot.RESEARCH_DATA,
 }
 
+RESOURCE_TARGET_ROOT: Mapping[ResourceRole, LogicalRoot] = {
+    ResourceRole.REGISTRY_DATABASE: LogicalRoot.REGISTRY,
+    ResourceRole.REGISTRY_MANIFEST: LogicalRoot.REGISTRY,
+    ResourceRole.HISTORICAL_STORE: LogicalRoot.EXPERIMENT_STORE,
+    ResourceRole.RESEARCH_EVALUATION_STORE: LogicalRoot.EXPERIMENT_STORE,
+    ResourceRole.PATCHCORE_STORE: LogicalRoot.EXPERIMENT_STORE,
+    ResourceRole.HYBRID_STORE: LogicalRoot.EXPERIMENT_STORE,
+    ResourceRole.LEARNED_ENVIRONMENT_LOCK: LogicalRoot.LEARNED_ARTIFACT,
+    ResourceRole.OFFICIAL_WEIGHT: LogicalRoot.LEARNED_ARTIFACT,
+    ResourceRole.PATCHCORE_MODEL: LogicalRoot.LEARNED_ARTIFACT,
+    ResourceRole.PATCHCORE_CALIBRATION: LogicalRoot.LEARNED_ARTIFACT,
+    ResourceRole.HYBRID_MODEL: LogicalRoot.LEARNED_ARTIFACT,
+    ResourceRole.HYBRID_FUSION: LogicalRoot.LEARNED_ARTIFACT,
+}
+
 _PROTECTED_CHILDREN = frozenset(
     {
         LogicalRoot.REGISTRY,
@@ -101,6 +133,7 @@ _PROTECTED_CHILDREN = frozenset(
     }
 )
 _RULE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 def preferred_config_path() -> Path:
@@ -196,6 +229,36 @@ def _role_name(value: LegacyReferenceRole | str) -> LegacyReferenceRole:
         ) from error
 
 
+def _resource_role(value: ResourceRole | str) -> ResourceRole:
+    try:
+        return value if isinstance(value, ResourceRole) else ResourceRole(value)
+    except ValueError as error:
+        raise StorageConfigurationError(
+            f"Unknown protected-resource role: {value!r}"
+        ) from error
+
+
+def _validated_relative(
+    value: str | os.PathLike[str],
+    *,
+    label: str,
+    allow_empty: bool = True,
+) -> Path:
+    raw = os.fspath(value)
+    if not isinstance(raw, str):
+        raw = str(raw)
+    if "\x00" in raw:
+        raise StorageConfigurationError(f"{label} contains a NUL byte")
+    if _contains_parent_reference(raw):
+        raise StorageConfigurationError(f"{label} contains unsafe traversal")
+    selected = Path(raw)
+    if selected.is_absolute():
+        raise StorageConfigurationError(f"{label} must be relative")
+    if not allow_empty and (not raw or selected == Path(".")):
+        raise StorageConfigurationError(f"{label} must be a non-empty relative path")
+    return Path() if selected == Path(".") else selected
+
+
 @dataclass(frozen=True)
 class LegacyTranslationRule:
     """One exact, role-scoped historical-prefix translation."""
@@ -204,6 +267,7 @@ class LegacyTranslationRule:
     identity: str
     stored_prefix: Path
     target_root: LogicalRoot
+    destination_subpath: Path = Path()
     public_safe: bool = False
     redistribution_allowed: bool = False
 
@@ -214,9 +278,29 @@ class LegacyTranslationRule:
             raise StorageConfigurationError(
                 "Translation identity must use 1-128 letters, digits, dots, dashes, or underscores"
             )
-        prefix = _validated_absolute(
-            self.stored_prefix,
-            label=f"translation {self.identity} stored_prefix",
+        raw_prefix = os.fspath(self.stored_prefix)
+        if not isinstance(raw_prefix, str) or not raw_prefix.strip():
+            raise StorageConfigurationError("Translation stored_prefix must be non-empty")
+        if "\x00" in raw_prefix or _contains_parent_reference(raw_prefix):
+            raise StorageConfigurationError(
+                "Translation stored_prefix contains unsafe traversal or a NUL byte"
+            )
+        selected_prefix = Path(raw_prefix)
+        prefix = (
+            _validated_absolute(
+                selected_prefix,
+                label=f"translation {self.identity} stored_prefix",
+            )
+            if selected_prefix.is_absolute()
+            else _validated_relative(
+                selected_prefix,
+                label=f"translation {self.identity} stored_prefix",
+                allow_empty=False,
+            )
+        )
+        destination = _validated_relative(
+            self.destination_subpath,
+            label=f"translation {self.identity} destination_subpath",
         )
         if target is not ROLE_TARGET_ROOT[role]:
             raise StorageConfigurationError(
@@ -226,12 +310,23 @@ class LegacyTranslationRule:
         object.__setattr__(self, "role", role)
         object.__setattr__(self, "target_root", target)
         object.__setattr__(self, "stored_prefix", prefix)
+        object.__setattr__(self, "destination_subpath", destination)
+
+    @property
+    def stored_prefix_kind(self) -> str:
+        return "absolute" if self.stored_prefix.is_absolute() else "relative"
 
     def local_dict(self) -> dict[str, object]:
         return {
             "identity": self.identity,
             "stored_prefix": str(self.stored_prefix),
+            "stored_prefix_kind": self.stored_prefix_kind,
             "target_root": self.target_root.value,
+            "destination_subpath": (
+                ""
+                if self.destination_subpath == Path()
+                else self.destination_subpath.as_posix()
+            ),
             "public_safe": self.public_safe,
             "redistribution_allowed": self.redistribution_allowed,
         }
@@ -241,8 +336,64 @@ class LegacyTranslationRule:
             "identity": self.identity,
             "target_root": self.target_root.value,
             "stored_prefix": "[redacted]",
+            "stored_prefix_kind": self.stored_prefix_kind,
+            "destination_subpath": "[redacted]",
             "public_safe": self.public_safe,
             "redistribution_allowed": self.redistribution_allowed,
+        }
+
+
+@dataclass(frozen=True)
+class ResourceBinding:
+    """One private, contained and hash-bound protected-resource selection."""
+
+    role: ResourceRole
+    logical_root: LogicalRoot
+    relative_path: Path
+    expected_sha256: str
+    redistribution_allowed: bool = False
+
+    def __post_init__(self) -> None:
+        role = _resource_role(self.role)
+        logical_root = _root_name(self.logical_root)
+        if logical_root is not RESOURCE_TARGET_ROOT[role]:
+            raise StorageConfigurationError(
+                f"Resource {role.value} must use {RESOURCE_TARGET_ROOT[role].value}"
+            )
+        relative = _validated_relative(
+            self.relative_path,
+            label=f"resource {role.value} relative_path",
+            allow_empty=False,
+        )
+        digest = str(self.expected_sha256)
+        if not _SHA256.fullmatch(digest):
+            raise StorageConfigurationError(
+                f"Resource {role.value} expected_sha256 must be lowercase SHA-256"
+            )
+        if self.redistribution_allowed:
+            raise StorageConfigurationError(
+                "Protected resource bindings cannot grant redistribution rights"
+            )
+        object.__setattr__(self, "role", role)
+        object.__setattr__(self, "logical_root", logical_root)
+        object.__setattr__(self, "relative_path", relative)
+        object.__setattr__(self, "expected_sha256", digest)
+        object.__setattr__(self, "redistribution_allowed", False)
+
+    def local_dict(self) -> dict[str, object]:
+        return {
+            "logical_root": self.logical_root.value,
+            "relative_path": self.relative_path.as_posix(),
+            "expected_sha256": self.expected_sha256,
+            "redistribution_allowed": False,
+        }
+
+    def public_dict(self) -> dict[str, object]:
+        return {
+            "logical_root": self.logical_root.value,
+            "relative_path": "[redacted]",
+            "expected_sha256": self.expected_sha256,
+            "redistribution_allowed": False,
         }
 
 
@@ -273,6 +424,7 @@ class StorageConfig:
     roots: Mapping[LogicalRoot, Path]
     migration_state: MigrationState = MigrationState.EXTERNAL
     translation_rules: tuple[LegacyTranslationRule, ...] = ()
+    resource_bindings: tuple[ResourceBinding, ...] = ()
     schema: str = CONFIG_SCHEMA
     schema_version: int = CONFIG_SCHEMA_VERSION
 
@@ -314,20 +466,55 @@ class StorageConfig:
             raise StorageConfigurationError(f"Named-root set is incomplete: {detail}")
 
         rules: list[LegacyTranslationRule] = []
-        seen_roles: set[LegacyReferenceRole] = set()
+        seen_rule_identities: set[str] = set()
         for rule in self.translation_rules:
             if not isinstance(rule, LegacyTranslationRule):
                 raise StorageConfigurationError("translation_rules must be typed rules")
-            if rule.role in seen_roles:
+            if rule.identity in seen_rule_identities:
                 raise StorageConfigurationError(
-                    f"Only one translation rule is allowed for {rule.role.value}"
+                    f"Duplicate translation rule identity: {rule.identity}"
                 )
-            seen_roles.add(rule.role)
+            seen_rule_identities.add(rule.identity)
             rules.append(rule)
+        for index, left in enumerate(rules):
+            for right in rules[index + 1 :]:
+                if left.stored_prefix.is_absolute() != right.stored_prefix.is_absolute():
+                    continue
+                if (
+                    _is_relative_to(left.stored_prefix, right.stored_prefix)
+                    or _is_relative_to(right.stored_prefix, left.stored_prefix)
+                ):
+                    raise StorageConfigurationError(
+                        "Ambiguous overlapping translation rules: "
+                        f"{left.identity} and {right.identity}"
+                    )
+
+        bindings: list[ResourceBinding] = []
+        seen_resource_roles: set[ResourceRole] = set()
+        for binding in self.resource_bindings:
+            if not isinstance(binding, ResourceBinding):
+                raise StorageConfigurationError(
+                    "resource_bindings must contain typed ResourceBinding values"
+                )
+            if binding.role in seen_resource_roles:
+                raise StorageConfigurationError(
+                    f"Duplicate protected-resource role: {binding.role.value}"
+                )
+            seen_resource_roles.add(binding.role)
+            bindings.append(binding)
 
         object.__setattr__(self, "migration_state", state)
         object.__setattr__(self, "roots", normalised)
-        object.__setattr__(self, "translation_rules", tuple(rules))
+        object.__setattr__(
+            self,
+            "translation_rules",
+            tuple(sorted(rules, key=lambda item: (item.role.value, item.identity))),
+        )
+        object.__setattr__(
+            self,
+            "resource_bindings",
+            tuple(sorted(bindings, key=lambda item: item.role.value)),
+        )
         if state is MigrationState.EXTERNAL:
             self._validate_external_layout()
         else:
@@ -396,8 +583,23 @@ class StorageConfig:
         return self.roots[_root_name(name)]
 
     def rule(self, role: LegacyReferenceRole | str) -> LegacyTranslationRule | None:
+        rules = self.rules(role)
+        return rules[0] if rules else None
+
+    def rules(
+        self, role: LegacyReferenceRole | str
+    ) -> tuple[LegacyTranslationRule, ...]:
         wanted = _role_name(role)
-        return next((rule for rule in self.translation_rules if rule.role is wanted), None)
+        return tuple(rule for rule in self.translation_rules if rule.role is wanted)
+
+    def resource_binding(
+        self, role: ResourceRole | str
+    ) -> ResourceBinding | None:
+        wanted = _resource_role(role)
+        return next(
+            (binding for binding in self.resource_bindings if binding.role is wanted),
+            None,
+        )
 
     def configured_path(
         self,
@@ -510,11 +712,18 @@ class StorageConfig:
                 if public
                 else str(self.roots[name])
             )
-        translations = {
-            rule.role.value: (
-                rule.public_dict() if public else rule.local_dict()
+        translations = [
+            {
+                "role": rule.role.value,
+                **(rule.public_dict() if public else rule.local_dict()),
+            }
+            for rule in self.translation_rules
+        ]
+        resources = {
+            binding.role.value: (
+                binding.public_dict() if public else binding.local_dict()
             )
-            for rule in sorted(self.translation_rules, key=lambda item: item.role.value)
+            for binding in self.resource_bindings
         }
         result: dict[str, object] = {
             "schema": self.schema,
@@ -522,6 +731,7 @@ class StorageConfig:
             "migration_state": self.migration_state.value,
             "roots": roots,
             "translations": translations,
+            "resources": resources,
         }
         if public:
             result["configuration_identity"] = self.identity
@@ -547,19 +757,41 @@ class StorageConfig:
         ]
         for name in LogicalRoot:
             lines.append(f"{name.value} = {json.dumps(str(self.roots[name]))}")
-        for rule in sorted(self.translation_rules, key=lambda item: item.role.value):
+        for rule in self.translation_rules:
             lines.extend(
                 [
                     "",
-                    f"[translations.{rule.role.value}]",
+                    "[[translations]]",
+                    f"role = {json.dumps(rule.role.value)}",
                     f"identity = {json.dumps(rule.identity)}",
                     f"stored_prefix = {json.dumps(str(rule.stored_prefix))}",
                     f"target_root = {json.dumps(rule.target_root.value)}",
+                    (
+                        "destination_subpath = "
+                        f"{json.dumps('' if rule.destination_subpath == Path() else rule.destination_subpath.as_posix())}"
+                    ),
                     f"public_safe = {'true' if rule.public_safe else 'false'}",
                     (
                         "redistribution_allowed = "
                         f"{'true' if rule.redistribution_allowed else 'false'}"
                     ),
+                ]
+            )
+        for binding in self.resource_bindings:
+            lines.extend(
+                [
+                    "",
+                    f"[resources.{binding.role.value}]",
+                    f"logical_root = {json.dumps(binding.logical_root.value)}",
+                    (
+                        "relative_path = "
+                        f"{json.dumps(binding.relative_path.as_posix())}"
+                    ),
+                    (
+                        "expected_sha256 = "
+                        f"{json.dumps(binding.expected_sha256)}"
+                    ),
+                    "redistribution_allowed = false",
                 ]
             )
         return "\n".join(lines) + "\n"
@@ -571,6 +803,7 @@ class StorageConfig:
         source_root: Path,
         external_base: Path | None = None,
         translation_rules: tuple[LegacyTranslationRule, ...] = (),
+        resource_bindings: tuple[ResourceBinding, ...] = (),
     ) -> "StorageConfig":
         source = _validated_absolute(source_root, label=LogicalRoot.SOURCE.value)
         base = _validated_absolute(
@@ -596,6 +829,7 @@ class StorageConfig:
             },
             migration_state=MigrationState.EXTERNAL,
             translation_rules=translation_rules,
+            resource_bindings=resource_bindings,
         )
 
     @classmethod
@@ -604,6 +838,7 @@ class StorageConfig:
         source_root: Path,
         *,
         translation_rules: tuple[LegacyTranslationRule, ...] = (),
+        resource_bindings: tuple[ResourceBinding, ...] = (),
     ) -> "StorageConfig":
         """Construct the old layout explicitly; writes remain opt-in per call."""
 
@@ -625,6 +860,7 @@ class StorageConfig:
             },
             migration_state=MigrationState.LEGACY_REPOSITORY_COMPATIBILITY,
             translation_rules=translation_rules,
+            resource_bindings=resource_bindings,
         )
 
 
@@ -646,44 +882,52 @@ def discover_source_root(explicit: Path | None = None) -> Path:
     return _validated_absolute(package_parent, label=LogicalRoot.SOURCE.value)
 
 
-def _parse_rule(
-    role: LegacyReferenceRole,
-    raw: object,
-) -> LegacyTranslationRule:
+def _parse_rule(raw: object, *, index: int) -> LegacyTranslationRule:
     if not isinstance(raw, Mapping):
         raise StorageConfigurationError(
-            f"translations.{role.value} must be a TOML table"
+            f"translations[{index}] must be a TOML table"
         )
     expected = {
+        "role",
         "identity",
         "stored_prefix",
         "target_root",
+        "destination_subpath",
         "public_safe",
         "redistribution_allowed",
     }
     unexpected = set(raw) - expected
-    missing = {"identity", "stored_prefix", "target_root"} - set(raw)
+    missing = {"role", "identity", "stored_prefix", "target_root"} - set(raw)
     if unexpected or missing:
         detail = ", ".join(sorted(unexpected | missing))
         raise StorageConfigurationError(
-            f"Invalid translations.{role.value} fields: {detail}"
+            f"Invalid translations[{index}] fields: {detail}"
         )
-    for key in ("identity", "stored_prefix", "target_root"):
+    for key in (
+        "role",
+        "identity",
+        "stored_prefix",
+        "target_root",
+        "destination_subpath",
+    ):
+        if key not in raw:
+            continue
         if not isinstance(raw[key], str):
             raise StorageConfigurationError(
-                f"translations.{role.value}.{key} must be a string"
+                f"translations[{index}].{key} must be a string"
             )
     for key in ("public_safe", "redistribution_allowed"):
         if key in raw and type(raw[key]) is not bool:
             raise StorageConfigurationError(
-                f"translations.{role.value}.{key} must be boolean"
+                f"translations[{index}].{key} must be boolean"
             )
     try:
         return LegacyTranslationRule(
-            role=role,
+            role=_role_name(str(raw["role"])),
             identity=str(raw["identity"]),
             stored_prefix=Path(str(raw["stored_prefix"])),
             target_root=_root_name(str(raw["target_root"])),
+            destination_subpath=Path(str(raw.get("destination_subpath", ""))),
             public_safe=bool(raw.get("public_safe", False)),
             redistribution_allowed=bool(raw.get("redistribution_allowed", False)),
         )
@@ -691,12 +935,58 @@ def _parse_rule(
         if isinstance(error, StorageConfigurationError):
             raise
         raise StorageConfigurationError(
-            f"Invalid translations.{role.value}: {error}"
+            f"Invalid translations[{index}]: {error}"
         ) from error
 
 
+def _parse_resource(role: ResourceRole, raw: object) -> ResourceBinding:
+    if not isinstance(raw, Mapping):
+        raise StorageConfigurationError(
+            f"resources.{role.value} must be a TOML table"
+        )
+    expected = {
+        "logical_root",
+        "relative_path",
+        "expected_sha256",
+        "redistribution_allowed",
+    }
+    unexpected = set(raw) - expected
+    missing = {"logical_root", "relative_path", "expected_sha256"} - set(raw)
+    if unexpected or missing:
+        detail = ", ".join(sorted(unexpected | missing))
+        raise StorageConfigurationError(
+            f"Invalid resources.{role.value} fields: {detail}"
+        )
+    for key in ("logical_root", "relative_path", "expected_sha256"):
+        if not isinstance(raw[key], str):
+            raise StorageConfigurationError(
+                f"resources.{role.value}.{key} must be a string"
+            )
+    if (
+        "redistribution_allowed" in raw
+        and type(raw["redistribution_allowed"]) is not bool
+    ):
+        raise StorageConfigurationError(
+            f"resources.{role.value}.redistribution_allowed must be boolean"
+        )
+    return ResourceBinding(
+        role=role,
+        logical_root=_root_name(str(raw["logical_root"])),
+        relative_path=Path(str(raw["relative_path"])),
+        expected_sha256=str(raw["expected_sha256"]),
+        redistribution_allowed=bool(raw.get("redistribution_allowed", False)),
+    )
+
+
 def storage_config_from_mapping(raw: Mapping[str, Any]) -> StorageConfig:
-    expected = {"schema", "schema_version", "migration_state", "roots", "translations"}
+    expected = {
+        "schema",
+        "schema_version",
+        "migration_state",
+        "roots",
+        "translations",
+        "resources",
+    }
     unexpected = set(raw) - expected
     missing = {"schema", "schema_version", "migration_state", "roots"} - set(raw)
     if unexpected or missing:
@@ -722,18 +1012,26 @@ def storage_config_from_mapping(raw: Mapping[str, Any]) -> StorageConfig:
         raise StorageConfigurationError(
             "Root values must be strings: " + ", ".join(non_string_roots)
         )
-    translations_raw = raw.get("translations", {})
-    if not isinstance(translations_raw, Mapping):
-        raise StorageConfigurationError("translations must be a TOML table")
-    unknown_roles = set(translations_raw) - {item.value for item in LegacyReferenceRole}
-    if unknown_roles:
-        raise StorageConfigurationError(
-            "Unknown translation roles: " + ", ".join(sorted(unknown_roles))
-        )
+    translations_raw = raw.get("translations", [])
+    if not isinstance(translations_raw, list):
+        raise StorageConfigurationError("translations must be an array of TOML tables")
     rules = tuple(
-        _parse_rule(role, translations_raw[role.value])
-        for role in LegacyReferenceRole
-        if role.value in translations_raw
+        _parse_rule(item, index=index)
+        for index, item in enumerate(translations_raw)
+    )
+    resources_raw = raw.get("resources", {})
+    if not isinstance(resources_raw, Mapping):
+        raise StorageConfigurationError("resources must be a TOML table")
+    unknown_resources = set(resources_raw) - {item.value for item in ResourceRole}
+    if unknown_resources:
+        raise StorageConfigurationError(
+            "Unknown protected-resource roles: "
+            + ", ".join(sorted(unknown_resources))
+        )
+    bindings = tuple(
+        _parse_resource(role, resources_raw[role.value])
+        for role in ResourceRole
+        if role.value in resources_raw
     )
     try:
         state = MigrationState(str(raw["migration_state"]))
@@ -748,6 +1046,7 @@ def storage_config_from_mapping(raw: Mapping[str, Any]) -> StorageConfig:
         },
         migration_state=state,
         translation_rules=rules,
+        resource_bindings=bindings,
         schema=str(raw["schema"]),
         schema_version=int(raw["schema_version"]),
     )

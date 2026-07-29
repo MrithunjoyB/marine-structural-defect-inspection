@@ -14,6 +14,8 @@ import cv2
 import numpy as np
 import pandas as pd
 
+from structvision.operational_storage import OperationalStorageContext
+
 from experiment_tracking import METHOD_NAMES
 from feature_extraction import extract_feature_maps
 from region_proposal import _components, propose_regions
@@ -21,6 +23,10 @@ from region_proposal import _components, propose_regions
 
 EXECUTION_STATUSES=("planned","running","completed","partially_completed","failed","cancelled")
 AUTOMATIC_REVIEW_STATUS="automatically_evaluated"
+
+
+class ExternalRegisteredExperimentExecutionDisabledError(RuntimeError):
+    """The legacy write-oriented executor was selected in external mode."""
 
 
 @dataclass(frozen=True)
@@ -142,7 +148,15 @@ def render_matches(image,truth,proposal_masks,details,path):
     Path(path).parent.mkdir(parents=True,exist_ok=True); cv2.imwrite(str(path),overlay)
 
 
-def execute_plan(registry,store,plan_id,version=1,iou_threshold=.1,mask_overlap_threshold=.25,mode="resume",progress=None,cancel=None,ablation_config=None,methods_override=None):
+def execute_plan(registry,store,plan_id,version=1,iou_threshold=.1,mask_overlap_threshold=.25,mode="resume",progress=None,cancel=None,ablation_config=None,methods_override=None,operational_storage=None):
+    if operational_storage is None:
+        operational_storage = OperationalStorageContext.discover()
+    if getattr(operational_storage, "is_external", False):
+        raise ExternalRegisteredExperimentExecutionDisabledError(
+            "External registered-experiment execution is intentionally disabled; "
+            "use the future API-based benchmark runner. Read-only evidence inspection "
+            "remains available."
+        )
     plan=load_plan(registry,plan_id); images=selected_images(registry,plan); methods=list(methods_override or plan["configuration"].get("proposal_methods",list(METHOD_NAMES))); pairs=[(row,method) for _,row in images.iterrows() for method in methods]; completed=store.completed_pairs(plan_id,version); failed=store.failed_pairs(plan_id,version)
     if mode=="cancel" and completed: raise ValueError("Completed image-method pairs already exist; choose resume, overwrite, or create a new version")
     if mode=="retry_failed": pairs=[pair for pair in pairs if (pair[0].image_id,pair[1]) in failed]

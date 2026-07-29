@@ -27,7 +27,12 @@ import zipfile
 
 from PIL import Image, PngImagePlugin
 
-from structvision import __version__, demonstration_fixture
+from structvision import (
+    OperationalStorageContext,
+    StorageConfigurationError,
+    __version__,
+    demonstration_fixture,
+)
 
 
 BUNDLE_NAME = "StructVision-AI-Technical-Handoff"
@@ -135,6 +140,14 @@ def _parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--output", type=Path, help="new handoff directory")
     mode.add_argument("--verify", type=Path, help="existing handoff directory")
+    parser.add_argument(
+        "--storage-config",
+        type=Path,
+        help=(
+            "optional external-storage configuration override; otherwise the "
+            "preferred local configuration is discovered automatically"
+        ),
+    )
     return parser
 
 
@@ -218,6 +231,17 @@ def _safe_target(path: Path, repo_root: Path) -> Path:
             "Output already exists; choose a new path so no handoff is overwritten"
         )
     return target
+
+
+def _operational_output(
+    output: Path,
+    storage_context: OperationalStorageContext,
+) -> Path:
+    return (
+        storage_context.authorise_release_output(output).path
+        if storage_context.is_external
+        else output
+    )
 
 
 def _build_timestamp() -> str:
@@ -806,7 +830,11 @@ def verify_handoff(root: Path, *, expected_commit: str) -> tuple[int, int]:
     return file_count, size
 
 
-def build_handoff(output: Path) -> tuple[Path, str, int, int]:
+def build_handoff(
+    output: Path,
+    *,
+    storage_context: OperationalStorageContext | None = None,
+) -> tuple[Path, str, int, int]:
     root = _repository_root()
     commit = _git_text(root, "rev-parse", "HEAD")
     branch = _git_text(root, "branch", "--show-current")
@@ -817,7 +845,9 @@ def build_handoff(output: Path) -> tuple[Path, str, int, int]:
             "Working tree must be clean so every handoff document and source "
             "file belongs to the recorded commit"
         )
-    target = _safe_target(output, root)
+    context = storage_context or OperationalStorageContext.discover()
+    selected_output = _operational_output(output, context)
+    target = _safe_target(selected_output, root)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(
         tempfile.mkdtemp(
@@ -910,6 +940,9 @@ def build_handoff(output: Path) -> tuple[Path, str, int, int]:
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
+        storage_context = OperationalStorageContext.discover(
+            arguments.storage_config
+        )
         root = _repository_root()
         if arguments.verify is not None:
             commit = _git_text(root, "rev-parse", "HEAD")
@@ -922,14 +955,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"File count : {count}")
             print(f"Bundle size: {size} bytes")
             return 0
-        target, commit, count, size = build_handoff(arguments.output)
+        target, commit, count, size = build_handoff(
+            arguments.output,
+            storage_context=storage_context,
+        )
         print("Technical handoff built and verified")
         print(f"Output     : {target}")
         print(f"Git commit : {commit}")
         print(f"File count : {count}")
         print(f"Bundle size: {size} bytes")
         return 0
-    except HandoffError as error:
+    except (HandoffError, StorageConfigurationError) as error:
         print(f"Handoff error: {error}", file=sys.stderr)
         return 1
 
