@@ -21,7 +21,7 @@ PROVENANCE=["plan_id","dataset_id","dataset_version","dataset_split","image_id",
 FILTER_KEYS=[]
 
 
-def render_research_analysis(store,registry):
+def render_research_analysis(store,registry,path_resolver=None):
     raw=store.dataframe(); frame=enrich_results(raw,registry)
     if frame.empty:return
     st.markdown("#### Automatic Result Browser")
@@ -64,7 +64,7 @@ def render_research_analysis(store,registry):
     exports=st.columns(2); exports[0].download_button("Download filtered CSV",filtered_csv(filtered),"filtered_results.csv","text/csv"); exports[1].download_button("Download filtered JSON",filtered_json(filtered),"filtered_results.json","application/json")
     if selected_image:
         candidates=frame[frame.image_filename==selected_image]; experiments=sorted(candidates.experiment_id.unique()); default=experiments.index(selected_experiment) if selected_experiment in experiments else 0; comparison_experiment=st.selectbox("Image comparison experiment",experiments,index=default,key="result_image_comparison_experiment"); comparison=candidates[candidates.experiment_id==comparison_experiment]; st.markdown("##### Selected-image Method Comparison"); st.dataframe(comparison[[c for c in ESSENTIAL+METRICS if c in comparison]],width="stretch",hide_index=True)
-    _result_details(filtered,registry)
+    _result_details(filtered,registry,path_resolver)
     analysis,audit=_scientific_scope(frame,filtered)
     _category_evaluation(analysis)
     try: paired=paired_advanced(analysis)
@@ -89,11 +89,24 @@ def _reset_filters():
         if key.startswith(prefixes): del st.session_state[key]
 
 
-def _result_details(filtered,registry):
+def _result_details(filtered,registry,path_resolver=None):
     st.markdown("##### Result Details")
     row_id=st.selectbox("Selected result row",filtered.result_id.tolist(),format_func=lambda value:f"{filtered.loc[filtered.result_id==value,'image_filename'].iloc[0]} | {filtered.loc[filtered.result_id==value,'method'].iloc[0]}",key="result_detail_row")
     with st.expander("Expand selected result details"):
-        row=filtered[filtered.result_id==row_id].iloc[0]; image=registry.images(row.dataset_id); image=image[image.image_id==row.image_id].iloc[0]; columns=st.columns(3); columns[0].image(str(registry.root/"raw"/row.dataset_id/image.stored_filename),caption="Original image",width="stretch"); columns[1].image(load_ground_truth(image),caption="Ground-truth mask",width="stretch"); columns[2].image(row.visualization_path,caption="Matched and unmatched proposals",width="stretch")
+        row=filtered[filtered.result_id==row_id].iloc[0]; image=registry.images(row.dataset_id); image=image[image.image_id==row.image_id].iloc[0]; columns=st.columns(3); columns[0].image(str(registry.root/"raw"/row.dataset_id/image.stored_filename),caption="Original image",width="stretch"); columns[1].image(load_ground_truth(image,path_resolver),caption="Ground-truth mask",width="stretch")
+        visualization=Path(str(row.visualization_path))
+        if path_resolver is not None:
+            resolution=path_resolver.resolve_historical_report(str(row.visualization_path))
+            if resolution.available and resolution.resolved_path is not None:
+                visualization=resolution.resolved_path
+            else:
+                visualization=None
+                columns[2].warning(
+                    "Historical visualization path "
+                    f"{resolution.status.value}: {resolution.reason}"
+                )
+        if visualization is not None:
+            columns[2].image(str(visualization),caption="Matched and unmatched proposals",width="stretch")
         st.json({"method":row.method,"anomaly_category":row.anomaly_type,"precision":row.proposal_precision,"recall":None if pd.isna(row.proposal_recall) else row.proposal_recall,"false_positives":row.false_positive_proposals,"false_negatives":row.false_negative_anomalies,"processing_time":row.processing_time_seconds,"experiment":f"{row.experiment_id} v{row.experiment_version}","dataset":f"{row.dataset_id} {row.dataset_version} {row.dataset_split}","proposal_ranks_and_iou":json.loads(row.proposal_details_json),"execution_configuration":json.loads(row.configuration_json) if row.configuration_json else {}})
 
 

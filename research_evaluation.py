@@ -75,6 +75,7 @@ def render_research_evaluation(
     review_start_time: str | None,
     review_completion_time: str | None,
     preprocessing_settings: dict | None = None,
+    path_resolver=None,
 ) -> None:
     st.subheader("Research Evaluation")
     database_path = Path(os.environ.get("STRUCTVISION_RESEARCH_DB", output_dir / "research_evaluation.sqlite3"))
@@ -85,14 +86,14 @@ def render_research_evaluation(
         review_start_time, review_completion_time,
     )
     automatic_store=RegisteredExperimentStore(output_dir / "registered_experiment_results.sqlite3"); registry=DatasetRegistry(output_dir.parent/"research_data")
-    _render_registered_dataset_experiment(output_dir.parent, preprocessing_settings or {},automatic_store)
+    _render_registered_dataset_experiment(output_dir.parent, preprocessing_settings or {},automatic_store,path_resolver)
     st.divider()
-    _render_dashboard_and_management(store,automatic_store,registry)
+    _render_dashboard_and_management(store,automatic_store,registry,path_resolver)
     st.divider()
     _render_legacy_migration(store, legacy_json_path)
 
 
-def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:dict,automatic_store)->None:
+def _render_registered_dataset_experiment(base_dir:Path,preprocessing_settings:dict,automatic_store,path_resolver=None)->None:
     st.markdown("### Create Experiment from Registered Dataset")
     registry=DatasetRegistry(base_dir/"research_data"); datasets=registry.datasets()
     if datasets.empty:
@@ -173,7 +174,7 @@ def _render_automatic_results(registry,store,plan_id,version):
         _single_chart(summary,"processing_time_seconds","Automatic Processing Time","Seconds")
     selected_id=st.selectbox("Selected test image",results.image_id.unique(),format_func=lambda value:results.loc[results.image_id==value,"image_filename"].iloc[0])
     if st.button("Open Selected Test Image"):
-        row=selected[selected.image_id==selected_id].iloc[0]; image_path=registry.root/"raw"/row.dataset_id/row.stored_filename; truth=load_ground_truth(row); columns=st.columns(2); columns[0].image(str(image_path),caption="Original image",width="stretch"); columns[1].image(truth,caption="Exact ground-truth mask",width="stretch")
+        row=selected[selected.image_id==selected_id].iloc[0]; image_path=registry.root/"raw"/row.dataset_id/row.stored_filename; truth=load_ground_truth(row,path_resolver); columns=st.columns(2); columns[0].image(str(image_path),caption="Original image",width="stretch"); columns[1].image(truth,caption="Exact ground-truth mask",width="stretch")
         image_results=results[(results.image_id==selected_id)&(results.run_status=="completed")]
         for _,item in image_results.iterrows(): st.image(item.visualization_path,caption=f"{item.method}: green matched, red unmatched; ranks and IoU shown",width="stretch")
         st.dataframe(image_results[["method","first_true_anomaly_proposal_rank","proposal_details_json"]],width="stretch",hide_index=True)
@@ -265,12 +266,12 @@ def _render_recording(store, image_name, annotations, proposal_result, feature_m
                 st.error(f"Save cancelled: {error}")
 
 
-def _render_dashboard_and_management(store: ExperimentStore,automatic_store=None,registry=None) -> None:
+def _render_dashboard_and_management(store: ExperimentStore,automatic_store=None,registry=None,path_resolver=None) -> None:
     st.markdown("### Manage Experiments")
     all_records = store.dataframe()
     automatic=automatic_store.dataframe() if automatic_store else pd.DataFrame()
     if not automatic.empty:
-        render_research_analysis(automatic_store,registry)
+        render_research_analysis(automatic_store,registry,path_resolver)
     if all_records.empty:
         if automatic.empty: st.info("No SQLite experiment records are stored yet.")
         else: st.info("Automatic results are shown above; no separate human-review records are stored.")

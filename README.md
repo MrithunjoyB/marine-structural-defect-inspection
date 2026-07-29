@@ -39,7 +39,8 @@ Technical review: [Technical Handoff Guide](docs/technical-handoff.html),
 [Algorithm Specification](docs/algorithm-specification.md),
 [Pseudocode](docs/algorithm-pseudocode.md), [Code Guide](docs/code-structure-guide.md),
 [Technical Handoff](docs/technical-handoff.md),
-[Live Demonstration Runbook](docs/live-demo-runbook.md), and
+[Live Demonstration Runbook](docs/live-demo-runbook.md),
+[Portable Storage and Immutable Legacy Paths](docs/storage-portability.md), and the
 [Research Evidence Summary](docs/research-evidence-summary.md).
 
 Build a small verified drive handoff outside the repository:

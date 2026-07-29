@@ -37,6 +37,12 @@ from .hybrid.artifact import (
     HYBRID_IMPLEMENTATION_VERSION,
 )
 from .types import thaw_value
+from .storage import (
+    CONFIG_ENVIRONMENT_VARIABLE,
+    LogicalRoot,
+    PathIntent,
+    load_external_storage_config,
+)
 
 
 CLASSICAL_METHOD = "structvision-classical-baseline-v1-frozen"
@@ -209,17 +215,49 @@ class LearnedRuntimePaths:
 
     @classmethod
     def from_environment(cls) -> "LearnedRuntimePaths":
-        def selected(name: str) -> Path | None:
+        selected_config = os.environ.get(CONFIG_ENVIRONMENT_VARIABLE)
+        storage = (
+            load_external_storage_config(Path(selected_config).expanduser())
+            if selected_config
+            else None
+        )
+
+        def selected(name: str, root: LogicalRoot) -> Path | None:
             value = os.environ.get(name)
-            return Path(value).expanduser() if value else None
+            if not value:
+                return None
+            path = Path(value).expanduser()
+            if storage is not None:
+                return storage.authorise_path(
+                    root,
+                    path,
+                    intent=PathIntent.READ,
+                ).path
+            return path
 
         return cls(
-            environment_lock=selected("STRUCTVISION_ENVIRONMENT_LOCK"),
-            weight=selected("STRUCTVISION_PATCHCORE_WEIGHT"),
-            patchcore_model=selected("STRUCTVISION_PATCHCORE_MODEL_ARTIFACT"),
-            patchcore_calibration=selected("STRUCTVISION_PATCHCORE_CALIBRATION_ARTIFACT"),
-            hybrid_model=selected("STRUCTVISION_HYBRID_MODEL_ARTIFACT"),
-            hybrid_fusion=selected("STRUCTVISION_HYBRID_FUSION_ARTIFACT"),
+            environment_lock=selected(
+                "STRUCTVISION_ENVIRONMENT_LOCK", LogicalRoot.SOURCE
+            ),
+            weight=selected(
+                "STRUCTVISION_PATCHCORE_WEIGHT", LogicalRoot.LEARNED_ARTIFACT
+            ),
+            patchcore_model=selected(
+                "STRUCTVISION_PATCHCORE_MODEL_ARTIFACT",
+                LogicalRoot.LEARNED_ARTIFACT,
+            ),
+            patchcore_calibration=selected(
+                "STRUCTVISION_PATCHCORE_CALIBRATION_ARTIFACT",
+                LogicalRoot.LEARNED_ARTIFACT,
+            ),
+            hybrid_model=selected(
+                "STRUCTVISION_HYBRID_MODEL_ARTIFACT",
+                LogicalRoot.LEARNED_ARTIFACT,
+            ),
+            hybrid_fusion=selected(
+                "STRUCTVISION_HYBRID_FUSION_ARTIFACT",
+                LogicalRoot.LEARNED_ARTIFACT,
+            ),
         )
 
 

@@ -87,10 +87,19 @@ def selected_images(registry,plan):
     order={value:index for index,value in enumerate(plan["selected_image_ids"])}; selected["_order"]=selected.image_id.map(order); return selected.sort_values("_order")
 
 
-def load_ground_truth(row):
+def load_ground_truth(row,path_resolver=None):
     if not row.annotation_path:return np.zeros((int(row.height),int(row.width)),np.uint8)
-    mask=cv2.imread(str(row.annotation_path),cv2.IMREAD_GRAYSCALE)
-    if mask is None: raise ValueError(f"Ground-truth mask cannot be loaded: {row.annotation_path}")
+    selected_path=Path(str(row.annotation_path))
+    if path_resolver is not None:
+        resolution=path_resolver.resolve_registry_annotation(str(row.annotation_path))
+        if not resolution.available or resolution.resolved_path is None:
+            raise ValueError(
+                "Ground-truth path resolution "
+                f"{resolution.status.value}: {resolution.reason}"
+            )
+        selected_path=resolution.resolved_path
+    mask=cv2.imread(str(selected_path),cv2.IMREAD_GRAYSCALE)
+    if mask is None: raise ValueError(f"Ground-truth mask cannot be loaded: {selected_path}")
     return (mask>0).astype(np.uint8)*255
 
 

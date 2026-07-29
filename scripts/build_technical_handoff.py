@@ -77,6 +77,7 @@ PROHIBITED_NAMES = frozenset(
     {
         ".DS_Store",
         ".env",
+        "config.toml",
         "Thumbs.db",
         "desktop.ini",
     }

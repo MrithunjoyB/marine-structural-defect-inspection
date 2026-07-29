@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,6 +23,13 @@ from region_proposal import AblationConfig, _components, correct_region_mask, cr
 from research_evaluation import render_research_evaluation
 from report import generate_pdf_report
 from yolo_inference import run_yolo_inference
+from structvision.storage import (
+    CONFIG_ENVIRONMENT_VARIABLE,
+    LogicalRoot,
+    PathIntent,
+    load_external_storage_config,
+)
+from structvision.legacy_paths import LegacyPathResolver
 
 
 st.set_page_config(page_title="StructVision-AI", layout="wide")
@@ -30,9 +38,29 @@ st.set_page_config(page_title="StructVision-AI", layout="wide")
 def save_upload(uploaded_file) -> Path:
     suffix = Path(uploaded_file.name).suffix.lower() or ".png"
     safe_stem = Path(uploaded_file.name).stem.replace(" ", "_")[:48] or "image"
-    path = UPLOAD_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_stem}_{uuid4().hex[:6]}{suffix}"
+    configured = os.environ.get(CONFIG_ENVIRONMENT_VARIABLE)
+    if configured:
+        storage = load_external_storage_config(Path(configured).expanduser())
+        upload_dir = storage.configured_path(
+            LogicalRoot.RUNS,
+            "legacy-streamlit/uploads",
+            intent=PathIntent.WRITE,
+        ).path
+        upload_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        upload_dir = UPLOAD_DIR
+    path = upload_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_stem}_{uuid4().hex[:6]}{suffix}"
     path.write_bytes(uploaded_file.getbuffer())
     return path
+
+
+def configured_legacy_path_resolver() -> LegacyPathResolver | None:
+    configured = os.environ.get(CONFIG_ENVIRONMENT_VARIABLE)
+    if not configured:
+        return None
+    return LegacyPathResolver(
+        load_external_storage_config(Path(configured).expanduser())
+    )
 
 
 def load_cv_image(path: Path):
@@ -472,6 +500,7 @@ def main() -> None:
             review_start_time=st.session_state.review_start_time,
             review_completion_time=st.session_state.review_completion_time,
             preprocessing_settings=st.session_state.preprocess_settings,
+            path_resolver=configured_legacy_path_resolver(),
         )
 
     if active_page == "Research Dataset Intake":
