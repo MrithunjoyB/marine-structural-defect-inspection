@@ -22,7 +22,13 @@ structvision-analyse = "structvision.cli:main"
 structvision-live-demo = "structvision.live_console:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "build>=1.2"]
+dev = [
+  "pytest>=8.0",
+  "build>=1.2",
+  "matplotlib>=3.8.0",
+  "pandas>=2.2.0",
+  "reportlab>=4.2.0",
+]
 demo = ["streamlit>=1.36.0"]
 
 # PEP 735 keeps the heavyweight learned environment outside ``pip install .``.
@@ -46,3 +52,8 @@ normal-feature = [
 packages = ["structvision", "structvision.normal_feature", "structvision.hybrid", "scientific_contract"]
 package-dir = {structvision = "src/structvision", scientific_contract = "scientific_contract"}
 py-modules = ["preprocess", "feature_extraction", "region_proposal", "scoring"]
+
+[tool.pytest.ini_options]
+markers = [
+  "protected_integration: read-only integration requiring exact optional protected stores",
+]

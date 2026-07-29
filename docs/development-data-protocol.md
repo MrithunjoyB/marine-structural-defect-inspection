@@ -57,6 +57,32 @@ Only `normal_fit` constructs the feature memory and coreset; no anomaly mask or 
 
 No image in this protocol is described as independent, confirmatory, real-world, or externally provided.
 
+## Protected integration tests
+
+The ordinary source-only test invocation does not require ignored protected
+stores. Committed manifest schemas, identities, role separation, and tamper
+checks remain active in the default suite. A test that genuinely needs a local
+registry or historical result store is marked `protected_integration` and skips
+with the exact missing repository-relative store name when that store is absent.
+
+In an authorised installation that already contains the exact protected stores,
+run the integrations read-only with:
+
+```bash
+python -m pytest -m protected_integration -ra
+```
+
+To execute the same tests from a separate source checkout against an authorised
+installation, provide its root explicitly without adding it to `PYTHONPATH`:
+
+```bash
+STRUCTVISION_PROTECTED_TEST_ROOT=/path/to/authorised/installation \
+  python -m pytest -m protected_integration -ra
+```
+
+The selected root must be absolute. This mechanism does not copy, migrate, or
+symlink protected material and does not authorise image or annotation decoding.
+
 ## Proposal-guided hybrid protocol
 
 The newer `structvision-hybrid-development-v1` protocol is separate from the normal-feature baseline protocol above. Its committed [manifest](../development_data/hybrid-development-manifest-v1.json) has logical SHA-256 `a1e6f9a83e5e8d73275236e6dc4fafd985e6e1ef2c4aef21fd4156dc821829a4`. It retains eligible train anomalies for fusion fitting and deterministically divides clean train identity groups between 70-image `hybrid_normal_fit` and the clean portion of 126-image `hybrid_fusion_fit`; the 72 eligible validation images form `hybrid_development_holdout`.

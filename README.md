@@ -210,6 +210,27 @@ The repository does not currently include a complete, publication-ready interfac
 
 ## Installation
 
+For source development, the default tests, and the technical Streamlit client,
+install the declared development and demonstration surfaces together:
+
+```bash
+python3.12 -m venv .venv-core
+source .venv-core/bin/activate
+python -m pip install -e '.[dev,demo]'
+python -m pytest -ra
+```
+
+Every collected default test must finish as a pass, an explicit skip, or a
+failure. Optional protected-store integration tests skip with the missing store
+named when those ignored local stores are unavailable.
+
+The root `requirements.txt` is retained for legacy/full-application
+compatibility, including older application and training integrations. It is not
+the authoritative source-only development installation surface; use the
+`dev` and `demo` extras above for clean-checkout testing.
+
+For the legacy full-application workflow:
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate

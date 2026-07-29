@@ -4,6 +4,10 @@ import json
 import sqlite3
 import unittest
 
+import pytest
+
+from protected_test_support import require_protected_files
+
 
 REGISTERED_DATA_REFERENCE = {
     "schema_version": "structvision-registered-data-reference-v1",
@@ -37,11 +41,13 @@ REGISTERED_DATA_REFERENCE_IDENTITY = (
 class HistoricalEvidenceRegressionTests(unittest.TestCase):
     """Read-only guard for the local reviewed evidence stores when available."""
 
+    @pytest.mark.protected_integration
     def test_historical_888_rows_and_database_hash_are_unchanged(self):
-        root = Path(__file__).parents[1]
+        root = require_protected_files(
+            Path(__file__).parents[1],
+            "outputs/registered_experiment_results.sqlite3",
+        )
         database = root / "outputs" / "registered_experiment_results.sqlite3"
-        if not database.exists():
-            self.skipTest("Ignored historical runtime result store is not present")
         before = hashlib.sha256(database.read_bytes()).hexdigest()
         uri = database.resolve().as_uri() + "?mode=ro"
         connection = sqlite3.connect(uri, uri=True)
@@ -54,16 +60,19 @@ class HistoricalEvidenceRegressionTests(unittest.TestCase):
         self.assertEqual(before, "1ebde1de1f065b5b220366798147beb67dd10a446b7cd8840f988c9aeda9ce92")
         self.assertEqual(after, before)
 
+    @pytest.mark.protected_integration
     def test_all_historical_store_hashes_and_counts_are_unchanged(self):
-        root = Path(__file__).parents[1]
+        root = require_protected_files(
+            Path(__file__).parents[1],
+            "outputs/registered_experiment_results.sqlite3",
+            "outputs/research_evaluation.sqlite3",
+        )
         expected = {
             "outputs/registered_experiment_results.sqlite3": ("1ebde1de1f065b5b220366798147beb67dd10a446b7cd8840f988c9aeda9ce92", "automatic_results", 888),
             "outputs/research_evaluation.sqlite3": ("9a77d748dbf9780f5f0e104bea3412ddaadcad10b54a2c1fceed0e532acef640", "experiment_records", 0),
         }
         for relative, (expected_hash, table, expected_rows) in expected.items():
             database = root / relative
-            if not database.exists():
-                continue
             self.assertEqual(hashlib.sha256(database.read_bytes()).hexdigest(), expected_hash)
             connection = sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)
             try:

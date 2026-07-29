@@ -3,6 +3,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
+import pytest
+
+from protected_test_support import require_protected_files
 from scientific_contract.dataset_audit import hamming_distance, read_registry_dataset
 from structvision.hybrid.errors import HybridProtocolError
 from structvision.hybrid.protocol import (
@@ -17,10 +20,8 @@ class HybridDevelopmentProtocolTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).parents[1]
-        cls.manifest = create_hybrid_development_manifest(
-            repository_root=cls.root,
-            registry_database=cls.root / "research_data/registry/datasets.sqlite",
-            historical_result_database=cls.root / "outputs/registered_experiment_results.sqlite3",
+        cls.manifest = load_hybrid_manifest(
+            cls.root / "development_data/hybrid-development-manifest-v1.json"
         )
 
     def test_counts_categories_and_deterministic_manifest_identity(self):
@@ -50,8 +51,13 @@ class HybridDevelopmentProtocolTests(unittest.TestCase):
                     for left_item in left for right_item in right
                 ))
 
+    @pytest.mark.protected_integration
     def test_selected_roles_have_no_pilot_or_historical_test_overlap(self):
-        registry = self.root / "research_data/registry/datasets.sqlite"
+        root = require_protected_files(
+            self.root,
+            "research_data/registry/datasets.sqlite",
+        )
+        registry = root / "research_data/registry/datasets.sqlite"
         pilot = read_registry_dataset(registry, "synthetic-expanded-pilot", "1.0")
         expanded = read_registry_dataset(registry, "synthetic-expanded", "1.0")
         historical_test = tuple(item for item in expanded if item.split == "test")
@@ -93,6 +99,22 @@ class HybridDevelopmentProtocolTests(unittest.TestCase):
             replace(self.manifest.normal_fit[0], split_role="test")
         with self.assertRaises(HybridProtocolError):
             replace(self.manifest.normal_fit[0], image_outcome="anomaly_present")
+
+    @pytest.mark.protected_integration
+    def test_optional_protected_stores_reproduce_committed_manifest(self):
+        root = require_protected_files(
+            self.root,
+            "research_data/registry/datasets.sqlite",
+            "outputs/registered_experiment_results.sqlite3",
+        )
+        generated = create_hybrid_development_manifest(
+            repository_root=root,
+            registry_database=root / "research_data/registry/datasets.sqlite",
+            historical_result_database=(
+                root / "outputs/registered_experiment_results.sqlite3"
+            ),
+        )
+        self.assertEqual(generated, self.manifest)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,9 @@ from tempfile import TemporaryDirectory
 import hashlib
 import unittest
 
+import pytest
+
+from protected_test_support import require_protected_files
 from structvision.hybrid.errors import HybridExperimentError, HybridFusionError
 from structvision.hybrid.artifact import (
     DECLARED_BUDGETS,
@@ -82,8 +85,14 @@ class HybridSelectionAndExperimentTests(unittest.TestCase):
             with self.assertRaises(HybridExperimentError):
                 ledger.finish(attempt_id="primary", status="completed")
 
+    @pytest.mark.protected_integration
     def test_protected_historical_hashes_and_rows_remain_at_baseline(self):
-        root = Path(__file__).parents[1]
+        root = require_protected_files(
+            Path(__file__).parents[1],
+            "outputs/research_evaluation.sqlite3",
+            "outputs/registered_experiment_results.sqlite3",
+            "research_data/registry/datasets.sqlite",
+        )
         expected = {
             "outputs/research_evaluation.sqlite3": "9a77d748dbf9780f5f0e104bea3412ddaadcad10b54a2c1fceed0e532acef640",
             "outputs/registered_experiment_results.sqlite3": "1ebde1de1f065b5b220366798147beb67dd10a446b7cd8840f988c9aeda9ce92",

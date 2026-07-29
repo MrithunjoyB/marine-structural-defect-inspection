@@ -1,6 +1,7 @@
 from dataclasses import replace
 from pathlib import Path
 import json
+import subprocess
 import tempfile
 import unittest
 
@@ -16,6 +17,35 @@ from research_dataset import (
 from research_evaluation import chart_height,has_valid_metric
 from dataset_management import DatasetManager
 from synthetic_benchmark import generate_cases
+
+
+def tracked_project_files(
+    root: Path,
+    *,
+    suffixes: frozenset[str] = frozenset({".py"}),
+) -> tuple[Path, ...]:
+    """Return only files represented in the repository's Git index."""
+    completed = subprocess.run(
+        ["git", "ls-files", "-z", "--cached"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    names = completed.stdout.decode("utf-8").split("\0")
+    return tuple(
+        root / name
+        for name in names
+        if name and Path(name).suffix in suffixes
+    )
+
+
+def deprecated_streamlit_width_offenders(root: Path) -> tuple[Path, ...]:
+    deprecated = "use_container_" + "width"
+    return tuple(
+        path
+        for path in tracked_project_files(root)
+        if deprecated in path.read_text(encoding="utf-8")
+    )
 
 
 def metadata(dataset_id="dataset-a",ground="verified dataset annotation",annotation="none",licence="CC-BY-4.0"):
@@ -147,9 +177,59 @@ class ResearchDatasetTests(unittest.TestCase):
 
     def test_no_deprecated_streamlit_width_usage(self):
         root=Path(__file__).resolve().parents[1]
-        deprecated="use_container_"+"width"
-        offenders=[str(path) for path in root.rglob("*.py") if "venv" not in path.parts and deprecated in path.read_text(encoding="utf-8")]
-        self.assertEqual(offenders,[])
+        self.assertEqual(deprecated_streamlit_width_offenders(root), ())
+
+    def test_source_scan_excludes_every_untracked_or_ignored_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / ".gitignore").write_text(
+                "/.venv/\n"
+                "/.venv-core/\n"
+                "/venv/\n"
+                "/arbitrary-python-environment/\n",
+                encoding="utf-8",
+            )
+            tracked = root / "application.py"
+            tracked.write_text("WIDTH = 'stretch'\n", encoding="utf-8")
+            ignored_roots = (
+                root / ".venv",
+                root / ".venv-core",
+                root / "venv",
+                root / "arbitrary-python-environment",
+            )
+            for environment in ignored_roots:
+                third_party = environment / "lib" / "site-packages"
+                third_party.mkdir(parents=True)
+                (third_party / "vendor.py").write_text(
+                    "use_container_" + "width = True\n",
+                    encoding="utf-8",
+                )
+            untracked = root / "untracked.py"
+            untracked.write_text(
+                "use_container_" + "width = True\n",
+                encoding="utf-8",
+            )
+            subprocess.run(
+                ["git", "add", ".gitignore", "application.py"],
+                cwd=root,
+                check=True,
+            )
+
+            self.assertEqual(
+                tracked_project_files(root),
+                (tracked,),
+            )
+            self.assertEqual(deprecated_streamlit_width_offenders(root), ())
+
+            tracked.write_text(
+                "use_container_" + "width = True\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                deprecated_streamlit_width_offenders(root),
+                (tracked,),
+            )
 
 
 if __name__=="__main__":unittest.main()

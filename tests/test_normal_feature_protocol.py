@@ -4,6 +4,9 @@ from tempfile import TemporaryDirectory
 import hashlib
 import unittest
 
+import pytest
+
+from protected_test_support import require_protected_files
 from structvision.development_protocol import (
     create_protected_development_manifest,
     load_development_manifest,
@@ -16,17 +19,15 @@ class ProtectedDevelopmentProtocolTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).parents[1]
-        cls.manifest = create_protected_development_manifest(
-            repository_root=cls.root,
-            registry_database=cls.root / "research_data/registry/datasets.sqlite",
-            historical_result_database=cls.root / "outputs/registered_experiment_results.sqlite3",
+        cls.manifest = load_development_manifest(
+            cls.root
+            / "development_data/normal-feature-development-manifest-v1.json"
         )
 
     def test_protected_counts_roles_categories_and_hash_are_deterministic(self):
-        second = create_protected_development_manifest(
-            repository_root=self.root,
-            registry_database=self.root / "research_data/registry/datasets.sqlite",
-            historical_result_database=self.root / "outputs/registered_experiment_results.sqlite3",
+        second = load_development_manifest(
+            self.root
+            / "development_data/normal-feature-development-manifest-v1.json"
         )
         self.assertEqual(len(self.manifest.normal_fit), 91)
         self.assertEqual(len(self.manifest.calibration_validation), 72)
@@ -69,11 +70,33 @@ class ProtectedDevelopmentProtocolTests(unittest.TestCase):
         with self.assertRaises(DevelopmentProtocolError):
             replace(self.manifest.selected_images[0], split_role="test")
 
+    @pytest.mark.protected_integration
     def test_registry_and_historical_store_hashes_are_recorded(self):
-        registry = self.root / "research_data/registry/datasets.sqlite"
-        historical = self.root / "outputs/registered_experiment_results.sqlite3"
+        root = require_protected_files(
+            self.root,
+            "research_data/registry/datasets.sqlite",
+            "outputs/registered_experiment_results.sqlite3",
+        )
+        registry = root / "research_data/registry/datasets.sqlite"
+        historical = root / "outputs/registered_experiment_results.sqlite3"
         self.assertEqual(hashlib.sha256(registry.read_bytes()).hexdigest(), self.manifest.source_registry_sha256)
         self.assertEqual(hashlib.sha256(historical.read_bytes()).hexdigest(), self.manifest.historical_result_store_sha256)
+
+    @pytest.mark.protected_integration
+    def test_optional_protected_stores_reproduce_committed_manifest(self):
+        root = require_protected_files(
+            self.root,
+            "research_data/registry/datasets.sqlite",
+            "outputs/registered_experiment_results.sqlite3",
+        )
+        generated = create_protected_development_manifest(
+            repository_root=root,
+            registry_database=root / "research_data/registry/datasets.sqlite",
+            historical_result_database=(
+                root / "outputs/registered_experiment_results.sqlite3"
+            ),
+        )
+        self.assertEqual(generated, self.manifest)
 
 
 if __name__ == "__main__":

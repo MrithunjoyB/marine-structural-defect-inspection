@@ -1,6 +1,9 @@
 from pathlib import Path
 import unittest
 
+import pytest
+
+from protected_test_support import require_protected_files
 from scientific_contract.dataset_audit import (
     DatasetImageIdentity,
     audit_dataset_overlap,
@@ -35,10 +38,13 @@ class DatasetOverlapAuditTests(unittest.TestCase):
         self.assertEqual(len(report.unsupported_unique_statuses), 1)
         self.assertFalse(report.perceptual_uniqueness_established)
 
+    @pytest.mark.protected_integration
     def test_current_historical_registry_confirms_80_and_13(self):
-        database = Path(__file__).parents[1] / "research_data" / "registry" / "datasets.sqlite"
-        if not database.exists():
-            self.skipTest("Ignored historical runtime registry is not present")
+        root = require_protected_files(
+            Path(__file__).parents[1],
+            "research_data/registry/datasets.sqlite",
+        )
+        database = root / "research_data" / "registry" / "datasets.sqlite"
         report = audit_registered_datasets(
             database, "synthetic-expanded-pilot", "1.0",
             "synthetic-expanded", "1.0",

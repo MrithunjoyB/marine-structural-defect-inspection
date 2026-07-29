@@ -6,6 +6,10 @@ from pathlib import Path
 import sqlite3
 import unittest
 
+import pytest
+
+from protected_test_support import require_protected_files
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,16 +102,31 @@ class ProductArchitectureTests(unittest.TestCase):
         for name, digest in expected.items():
             self.assertEqual(sha256((ROOT / name).read_bytes()).hexdigest(), digest)
 
+    @pytest.mark.protected_integration
     def test_local_protected_stores_are_unchanged_when_present(self):
+        root = require_protected_files(
+            ROOT,
+            "outputs/registered_experiment_results.sqlite3",
+            (
+                "outputs/normal-feature-development/"
+                "SYN-NORMAL-FEATURE-DEV-001-v1/"
+                "v2-development-results.sqlite3"
+            ),
+            (
+                "outputs/proposal-guided-hybrid/"
+                "SYN-PROPOSAL-HYBRID-DEV-001-v1/"
+                "v2-hybrid-development-results.sqlite3"
+            ),
+        )
         stores = (
             (
-                ROOT / "outputs" / "registered_experiment_results.sqlite3",
+                root / "outputs" / "registered_experiment_results.sqlite3",
                 "1ebde1de1f065b5b220366798147beb67dd10a446b7cd8840f988c9aeda9ce92",
                 "SELECT COUNT(*) FROM automatic_results",
                 888,
             ),
             (
-                ROOT
+                root
                 / "outputs"
                 / "normal-feature-development"
                 / "SYN-NORMAL-FEATURE-DEV-001-v1"
@@ -117,7 +136,7 @@ class ProductArchitectureTests(unittest.TestCase):
                 144,
             ),
             (
-                ROOT
+                root
                 / "outputs"
                 / "proposal-guided-hybrid"
                 / "SYN-PROPOSAL-HYBRID-DEV-001-v1"
@@ -128,8 +147,6 @@ class ProductArchitectureTests(unittest.TestCase):
             ),
         )
         for path, digest, query, count in stores:
-            if not path.is_file():
-                continue
             self.assertEqual(sha256(path.read_bytes()).hexdigest(), digest)
             connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
             try:
