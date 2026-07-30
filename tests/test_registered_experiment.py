@@ -13,6 +13,7 @@ from registered_experiment import (
 )
 from research_dataset import DatasetRegistry, register_synthetic_benchmark
 from ablation_study import ABLATION_CONFIGS,ablation_leaderboard,execute_ablation_plan
+from storage_test_support import isolated_no_configuration
 
 
 class MatchingTests(unittest.TestCase):
@@ -31,15 +32,16 @@ class MatchingTests(unittest.TestCase):
 class RegisteredExecutionSmokeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp=tempfile.TemporaryDirectory(); cls.registry=DatasetRegistry(Path(cls.temp.name)/"research_data"); register_synthetic_benchmark(cls.registry,seed=31)
+        cls.storage_context=isolated_no_configuration(); cls.storage=cls.storage_context.__enter__()
+        cls.addClassCleanup(cls.storage_context.__exit__,None,None,None)
+        cls.temp=tempfile.TemporaryDirectory(); cls.addClassCleanup(cls.temp.cleanup)
+        cls.registry=DatasetRegistry(Path(cls.temp.name)/"research_data"); register_synthetic_benchmark(cls.registry,seed=31)
         images=cls.registry.images("synthetic-controlled").head(3)
         with cls.registry.connect() as con:
             for image_id in images.image_id: con.execute("UPDATE images SET split='test' WHERE image_id=?",(image_id,))
         cls.registry.create_experiment_plan("SYN-TEST-001","synthetic-controlled","1.0","test",3,"Development / Test","MB-01",METHOD_NAMES,{"maximum_regions":8},17)
         with cls.registry.connect() as con: cls.plan_id=con.execute("SELECT plan_id FROM experiment_plans WHERE experiment_id='SYN-TEST-001'").fetchone()[0]
         cls.store=RegisteredExperimentStore(Path(cls.temp.name)/"automatic.sqlite3"); cls.results=execute_plan(cls.registry,cls.store,cls.plan_id,1,.1,.25,"resume")
-    @classmethod
-    def tearDownClass(cls): cls.temp.cleanup()
 
     def test_ablation_persistence_resume_and_leaderboard(self):
         definitions=ABLATION_CONFIGS[:2]; first=execute_ablation_plan(self.registry,self.store,self.plan_id,definitions,2,.1,.25,"resume"); self.assertEqual(len(first),6); second=execute_ablation_plan(self.registry,self.store,self.plan_id,definitions,2,.1,.25,"resume"); self.assertEqual(len(second),6); self.assertEqual(len(ablation_leaderboard(second)),2)

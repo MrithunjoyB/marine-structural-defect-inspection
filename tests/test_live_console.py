@@ -20,6 +20,8 @@ from structvision import (
 )
 from structvision import live_console
 
+from storage_test_support import isolated_no_configuration
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,6 +47,14 @@ def fixture_bytes() -> bytes:
 
 class LiveConsoleTests(unittest.TestCase):
     def setUp(self):
+        self.storage_context = isolated_no_configuration()
+        self.storage = self.storage_context.__enter__()
+        self.addCleanup(
+            self.storage_context.__exit__,
+            None,
+            None,
+            None,
+        )
         self.temporary = tempfile.TemporaryDirectory(
             dir=Path(tempfile.gettempdir()).resolve()
         )

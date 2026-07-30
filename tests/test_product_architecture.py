@@ -9,6 +9,7 @@ import unittest
 import pytest
 
 from protected_test_support import require_protected_files
+from storage_test_support import isolated_no_configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,11 +76,12 @@ class ProductArchitectureTests(unittest.TestCase):
             for path in protected
             if path.is_file()
         }
-        app = AppTest.from_file(
-            str(ROOT / "apps" / "structvision_demo.py"),
-            default_timeout=20,
-        )
-        app.run()
+        with isolated_no_configuration():
+            app = AppTest.from_file(
+                str(ROOT / "apps" / "structvision_demo.py"),
+                default_timeout=20,
+            )
+            app.run()
         self.assertFalse(app.exception)
         self.assertEqual([item.value for item in app.title], ["StructVision-AI"])
         self.assertIn("Analyse an Image", [item.label for item in app.tabs])

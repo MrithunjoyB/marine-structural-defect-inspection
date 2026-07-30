@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from io import BytesIO
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -13,16 +11,14 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
+from storage_test_support import (
+    explicit_invalid_configuration,
+    isolated_no_configuration,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src"
-
-
-def cli_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    environment["PYTHONPATH"] = str(SOURCE)
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    return environment
 
 
 def write_image(path: Path) -> None:
@@ -32,11 +28,23 @@ def write_image(path: Path) -> None:
 
 
 class LiveCliTests(unittest.TestCase):
+    def setUp(self):
+        self.storage_context = isolated_no_configuration()
+        self.storage = self.storage_context.__enter__()
+        self.addCleanup(
+            self.storage_context.__exit__,
+            None,
+            None,
+            None,
+        )
+
     def run_cli(self, arguments: list[str], cwd: Path) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, "-m", "structvision.cli", *arguments],
+            [sys.executable, "-B", "-m", "structvision.cli", *arguments],
             cwd=cwd,
-            env=cli_environment(),
+            env=self.storage.subprocess_environment(
+                {"PYTHONPATH": str(SOURCE)}
+            ),
             capture_output=True,
             check=False,
         )
@@ -121,6 +129,31 @@ class LiveCliTests(unittest.TestCase):
                     main(["--input", str(image), "--method", "patchcore"]),
                     5,
                 )
+
+    def test_explicit_malformed_configuration_has_storage_exit_code(self):
+        with explicit_invalid_configuration() as invalid:
+            image = invalid.root / "inspection.png"
+            write_image(image)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-B",
+                    "-m",
+                    "structvision.cli",
+                    "--input",
+                    str(image),
+                    "--storage-config",
+                    str(invalid.invalid_configuration_path),
+                ],
+                cwd=invalid.root,
+                env=invalid.subprocess_environment(
+                    {"PYTHONPATH": str(SOURCE)}
+                ),
+                capture_output=True,
+                check=False,
+            )
+        self.assertEqual(completed.returncode, 8)
+        self.assertIn(b"Storage configuration error", completed.stderr)
 
 
 if __name__ == "__main__":

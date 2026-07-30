@@ -33,6 +33,11 @@ from structvision import (
 )
 from structvision.legacy_paths import ResolutionStatus
 from structvision.storage import CONFIG_ENVIRONMENT_VARIABLE
+from storage_test_support import (
+    explicit_invalid_configuration,
+    isolated_no_configuration,
+    synthetic_external_configuration,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,6 +111,53 @@ class OperationalStorageContextTests(unittest.TestCase):
                 absent = OperationalStorageContext.discover()
             self.assertEqual(absent.mode, OperationalStorageMode.NO_CONFIGURATION)
 
+    def test_surrounding_preferred_config_cannot_leak_into_isolated_no_config(self):
+        original_environment = dict(os.environ)
+        with synthetic_external_configuration() as surrounding:
+            surrounding_environment = dict(os.environ)
+            discovered = OperationalStorageContext.discover()
+            self.assertEqual(discovered.mode, OperationalStorageMode.EXTERNAL)
+            self.assertEqual(
+                discovered.configuration.identity,
+                surrounding.configuration.identity,
+            )
+            with isolated_no_configuration() as isolated:
+                self.assertFalse(isolated.preferred_configuration_path.exists())
+                self.assertEqual(
+                    OperationalStorageContext.discover().mode,
+                    OperationalStorageMode.NO_CONFIGURATION,
+                )
+            self.assertEqual(dict(os.environ), surrounding_environment)
+            self.assertEqual(
+                OperationalStorageContext.discover().configuration.identity,
+                surrounding.configuration.identity,
+            )
+        self.assertEqual(dict(os.environ), original_environment)
+
+    def test_preferred_discovery_works_in_isolated_synthetic_activated_home(self):
+        original_environment = dict(os.environ)
+        with synthetic_external_configuration() as synthetic:
+            temporary_root = synthetic.root
+            self.assertTrue(synthetic.configuration_path.is_file())
+            discovered = OperationalStorageContext.discover()
+            self.assertEqual(discovered.mode, OperationalStorageMode.EXTERNAL)
+            self.assertEqual(
+                discovered.configuration.identity,
+                synthetic.configuration.identity,
+            )
+            self.assertEqual(
+                discovered.configuration.root(LogicalRoot.PRIVATE_DATA),
+                synthetic.private_data_root,
+            )
+            self.assertTrue(
+                all(
+                    binding.redistribution_allowed is False
+                    for binding in discovered.configuration.resource_bindings
+                )
+            )
+        self.assertFalse(temporary_root.exists())
+        self.assertEqual(dict(os.environ), original_environment)
+
     def test_malformed_and_legacy_configuration_fail_closed(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -130,20 +182,76 @@ class OperationalStorageContextTests(unittest.TestCase):
             )
             self.assertNotIn(str(fixture.root), public)
 
+    def test_external_path_security_refuses_outside_targets_symlinks_and_traversal(
+        self,
+    ):
+        with synthetic_external_configuration() as fixture:
+            context = OperationalStorageContext.external(fixture.configuration)
+            source = fixture.configuration.source_root
+            documents = fixture.root / "Documents" / "rollback-target"
+            protected = fixture.configuration.root(LogicalRoot.PROTECTED)
+            outside = fixture.root / "outside"
+            for path in (documents, outside):
+                path.mkdir(parents=True)
+
+            outside_input = source / "developer-input.png"
+            outside_input.write_bytes(b"outside private data")
+            with self.assertRaisesRegex(
+                StorageConfigurationError,
+                "private_data_root",
+            ):
+                context.authorise_private_input(outside_input)
+
+            refused_outputs = {
+                "outside-runs": outside / "run",
+                "developer": source / "outputs" / "run",
+                "documents": documents / "run",
+                "protected": protected / "run",
+            }
+            for label, target in refused_outputs.items():
+                with self.subTest(target=label), self.assertRaisesRegex(
+                    StorageConfigurationError,
+                    "runs_root",
+                ):
+                    context.authorise_run_output(target)
+
+            private_input = fixture.private_data_root / "physical-input.png"
+            private_input.write_bytes(b"synthetic input")
+            linked_input = fixture.private_data_root / "linked-input.png"
+            linked_input.symlink_to(private_input)
+            with self.assertRaisesRegex(StorageConfigurationError, "symlink"):
+                context.authorise_private_input(linked_input)
+
+            output_destination = outside / "output-destination"
+            output_destination.mkdir()
+            linked_output = fixture.runs_root / "linked-output"
+            linked_output.symlink_to(
+                output_destination,
+                target_is_directory=True,
+            )
+            with self.assertRaisesRegex(StorageConfigurationError, "symlink"):
+                context.authorise_run_output(linked_output)
+
+            with self.assertRaisesRegex(StorageConfigurationError, "traversal"):
+                context.authorise_private_input(
+                    Path(str(fixture.private_data_root) + "/../escape.png")
+                )
+            with self.assertRaisesRegex(StorageConfigurationError, "traversal"):
+                context.authorise_run_output(
+                    Path(str(fixture.runs_root) + "/../escape")
+                )
+
 
 class OfficialEntryPointStorageTests(unittest.TestCase):
     def test_live_console_authorises_private_input_and_runs_output(self):
         from structvision import live_console
 
-        with TemporaryDirectory() as temporary:
-            fixture = ExternalFixture(Path(temporary))
-            private_root = fixture.config.root(LogicalRoot.PRIVATE_DATA)
-            runs_root = fixture.config.root(LogicalRoot.RUNS)
-            private_root.mkdir(parents=True)
-            runs_root.mkdir(parents=True)
+        with synthetic_external_configuration() as fixture:
+            private_root = fixture.private_data_root
+            runs_root = fixture.runs_root
             image = private_root / "fixture.png"
             write_image(image)
-            configuration = fixture.config_file()
+            configuration = fixture.configuration_path
 
             accepted = runs_root / "accepted"
             self.assertEqual(
@@ -196,17 +304,12 @@ class OfficialEntryPointStorageTests(unittest.TestCase):
             self.assertFalse(refused_output.exists())
 
     def test_analysis_cli_stdout_only_is_write_free_in_external_mode(self):
-        with TemporaryDirectory() as temporary:
-            fixture = ExternalFixture(Path(temporary))
-            private_root = fixture.config.root(LogicalRoot.PRIVATE_DATA)
-            private_root.mkdir(parents=True)
+        with synthetic_external_configuration() as fixture:
+            private_root = fixture.private_data_root
             image = private_root / "fixture.png"
             write_image(image)
-            configuration = fixture.config_file()
+            configuration = fixture.configuration_path
             before = sorted(path.relative_to(fixture.root) for path in fixture.root.rglob("*"))
-            environment = dict(os.environ)
-            environment["PYTHONPATH"] = str(ROOT / "src")
-            environment["PYTHONDONTWRITEBYTECODE"] = "1"
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -220,7 +323,9 @@ class OfficialEntryPointStorageTests(unittest.TestCase):
                     str(configuration),
                 ],
                 cwd=fixture.root,
-                env=environment,
+                env=fixture.subprocess_environment(
+                    {"PYTHONPATH": str(ROOT / "src")}
+                ),
                 capture_output=True,
                 check=False,
             )
@@ -233,33 +338,19 @@ class OfficialEntryPointStorageTests(unittest.TestCase):
             from streamlit.testing.v1 import AppTest
         except ImportError:
             self.skipTest("optional Streamlit demonstration dependency is unavailable")
-        with TemporaryDirectory() as temporary:
-            fixture = ExternalFixture(Path(temporary))
-            configuration = fixture.config_file()
-            with patch.dict(
-                os.environ,
-                {CONFIG_ENVIRONMENT_VARIABLE: str(configuration)},
-                clear=False,
-            ):
-                configured = AppTest.from_file(
-                    str(ROOT / "apps" / "structvision_demo.py"),
-                    default_timeout=20,
-                ).run()
+        with synthetic_external_configuration():
+            configured = AppTest.from_file(
+                str(ROOT / "apps" / "structvision_demo.py"),
+                default_timeout=20,
+            ).run()
             self.assertFalse(configured.exception)
             self.assertEqual([item.value for item in configured.title], ["StructVision-AI"])
 
-            with patch.dict(
-                os.environ,
-                {CONFIG_ENVIRONMENT_VARIABLE: ""},
-                clear=False,
-            ), patch(
-                "structvision.storage.preferred_config_path",
-                return_value=fixture.root / "absent.toml",
-            ):
-                unconfigured = AppTest.from_file(
-                    str(ROOT / "apps" / "structvision_demo.py"),
-                    default_timeout=20,
-                ).run()
+        with isolated_no_configuration():
+            unconfigured = AppTest.from_file(
+                str(ROOT / "apps" / "structvision_demo.py"),
+                default_timeout=20,
+            ).run()
             self.assertFalse(unconfigured.exception)
 
     def test_modern_streamlit_masks_malformed_configuration_details(self):
@@ -267,9 +358,8 @@ class OfficialEntryPointStorageTests(unittest.TestCase):
             from streamlit.testing.v1 import AppTest
         except ImportError:
             self.skipTest("optional Streamlit demonstration dependency is unavailable")
-        with TemporaryDirectory() as temporary:
-            malformed = Path(temporary) / "private-malformed.toml"
-            malformed.write_text("[roots\n", encoding="utf-8")
+        with explicit_invalid_configuration() as invalid:
+            malformed = invalid.invalid_configuration_path
             with patch.dict(
                 os.environ,
                 {CONFIG_ENVIRONMENT_VARIABLE: str(malformed)},

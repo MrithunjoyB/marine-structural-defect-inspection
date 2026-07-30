@@ -27,6 +27,10 @@ from structvision.storage import (
     StorageConfigurationMissingError,
     load_storage_config,
 )
+from storage_test_support import (
+    isolated_no_configuration,
+    synthetic_external_configuration,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,22 +77,13 @@ class StorageConfigurationTests(unittest.TestCase):
                 )
 
     def test_module_import_creates_no_directory(self):
-        with TemporaryDirectory() as temporary:
-            root = physical(Path(temporary))
-            home = root / "home"
-            home.mkdir()
+        with isolated_no_configuration() as isolated:
+            root = isolated.root
             before = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
-            environment = dict(os.environ)
-            environment.update(
-                {
-                    "HOME": str(home),
-                    "PYTHONPATH": str(ROOT / "src"),
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                }
-            )
             completed = subprocess.run(
                 [
                     sys.executable,
+                    "-B",
                     "-c",
                     (
                         "import structvision.storage; "
@@ -97,7 +92,9 @@ class StorageConfigurationTests(unittest.TestCase):
                     ),
                 ],
                 cwd=root,
-                env=environment,
+                env=isolated.subprocess_environment(
+                    {"PYTHONPATH": str(ROOT / "src")}
+                ),
                 capture_output=True,
                 check=False,
             )
@@ -420,13 +417,10 @@ class StorageIntegrationTests(unittest.TestCase):
         self.assertIn("apps/structvision_demo.py", source[:guard])
 
     def test_cli_external_config_accepts_only_runs_root_outputs(self):
-        with TemporaryDirectory() as temporary:
-            fixture = StorageFixture(Path(temporary))
-            runs = fixture.config.root(LogicalRoot.RUNS)
-            runs.mkdir(parents=True)
-            config_path = fixture.write_config()
-            private_data = fixture.config.root(LogicalRoot.PRIVATE_DATA)
-            private_data.mkdir(parents=True)
+        with synthetic_external_configuration() as fixture:
+            runs = fixture.runs_root
+            config_path = fixture.configuration_path
+            private_data = fixture.private_data_root
             image_path = private_data / "fixture.png"
             yy, xx = np.indices((96, 128))
             image = np.clip(
@@ -437,15 +431,12 @@ class StorageIntegrationTests(unittest.TestCase):
             Image.fromarray(image).save(image_path)
             accepted = runs / "analysis.json"
             refused = fixture.root / "outside.json"
-            environment = dict(os.environ)
-            environment.update(
-                {
-                    "PYTHONPATH": str(ROOT / "src"),
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                }
+            environment = fixture.subprocess_environment(
+                {"PYTHONPATH": str(ROOT / "src")}
             )
             base = [
                 sys.executable,
+                "-B",
                 "-m",
                 "structvision.cli",
                 "--input",
